@@ -4,6 +4,22 @@ import { KeyboardArrowLeftOutlined } from '@mui/icons-material';
 
 const BASE = 'https://najot-edu.softwareengineer.uz/api/v1';
 
+// Swagger: GET /api/v1/groups/one/students/{groupId}
+function parseGroupStudents(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.students)) return data.students;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.data)) return data.data;
+  if (data.data && typeof data.data === 'object') {
+    if (Array.isArray(data.data.students)) return data.data.students;
+    if (Array.isArray(data.data.items)) return data.data.items;
+    if (Array.isArray(data.data.results)) return data.data.results;
+  }
+  return [];
+}
+
 // YYYY-MM-DD formatini chiroyli ko'rsatish
 function fmtDisplayDate(dateStr) {
   if (!dateStr) return '';
@@ -83,13 +99,24 @@ const AttendancePage = () => {
         setGroup(groupData.data || groupData);
       }
       if (studentsData) {
-        const list = Array.isArray(studentsData) ? studentsData
-          : (studentsData.students || studentsData.data || []);
+        let list = parseGroupStudents(studentsData);
+        if (!list.length && groupData) {
+          list = parseGroupStudents(groupData);
+          if (!list.length && Array.isArray(groupData.students)) list = groupData.students;
+        }
         setStudents(list);
-        // Dastlab hammani "kelmagan" deb belgilaymiz
         const init = {};
-        list.forEach(s => { init[s.id] = false; });
+        list.forEach(s => { if (s && s.id != null) init[s.id] = false; });
         setAttendance(init);
+      } else if (groupData) {
+        let list = parseGroupStudents(groupData);
+        if (!list.length && Array.isArray(groupData.students)) list = groupData.students;
+        if (list.length > 0) {
+          setStudents(list);
+          const init = {};
+          list.forEach(s => { if (s && s.id != null) init[s.id] = false; });
+          setAttendance(init);
+        }
       }
       // Mavjud lesson va davomat
       if (lessonData) {
@@ -114,6 +141,7 @@ const AttendancePage = () => {
 
   const handleSaveAttendance = async () => {
     if (!canEdit) return;
+    if (!topic.trim()) { setError("Mavzuni kiriting!"); return; }
     setSaving(true);
     setError('');
     setSuccess('');
@@ -121,33 +149,56 @@ const AttendancePage = () => {
     const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
 
     try {
-      // 1. Lesson yaratish yoki mavjudini olish
+      // 1. Shu sanada lesson bor-yo'qligini tekshiramiz
+      // GET /api/v1/groups/{groupId}/lesson?date=YYYY-MM-DD
       let lessonId = existingLessonId;
+      if (!lessonId) {
+        try {
+          const checkRes = await fetch(BASE + '/groups/' + groupId + '/lesson?date=' + date, {
+            headers: { Authorization: 'Bearer ' + token }
+          });
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            const cStr = JSON.stringify(checkData);
+            const cMatch = cStr.match(/"id"\s*:\s*(\d+)/);
+            if (cMatch) { lessonId = parseInt(cMatch[1]); setExistingLessonId(lessonId); }
+          }
+        } catch(e) { /* ignore */ }
+      }
+
+      // 2. Lesson yo'q bo'lsa — yangi yaratamiz
+      // POST /api/v1/groups/{groupId}/lesson → { group_id, topic, description }
       if (!lessonId) {
         const r = await fetch(BASE + '/groups/' + groupId + '/lesson', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             group_id: Number(groupId),
-            topic: topic.trim() || 'Dars',
-            description: description.trim() || topic.trim() || 'Dars',
+            topic: topic.trim(),
+            description: description.trim() || topic.trim(),
           }),
         });
         if (r.ok) {
           const d = await r.json();
-          const found = d?.id || d?.data?.id;
-          if (found) { lessonId = found; setExistingLessonId(found); }
+          const lStr = JSON.stringify(d);
+          const lMatch = lStr.match(/"id"\s*:\s*(\d+)/);
+          if (lMatch) { lessonId = parseInt(lMatch[1]); setExistingLessonId(lessonId); }
+        } else {
+          const errText = await r.text();
+          setError('Lesson yaratishda xatolik: ' + r.status + ' ' + errText);
+          setSaving(false);
+          return;
         }
       }
 
       if (!lessonId) {
-        setError('Lesson yaratishda xatolik!');
+        setError('Lesson IDsi topilmadi!');
         setSaving(false);
         return;
       }
 
-      // 2. Har bir talaba uchun davomat
-      // Swagger: POST /api/v1/attendance → { group_id, student_id, isPresent }
+      // 3. Har bir talaba uchun davomat
+      // POST /api/v1/attendance → { group_id, student_id, isPresent }
       const results = await Promise.allSettled(
         students.map(s =>
           fetch(BASE + '/attendance', {
@@ -161,14 +212,16 @@ const AttendancePage = () => {
           })
         )
       );
-      const anyOk = results.some(r => r.status === 'fulfilled' && r.value?.ok);
-      if (anyOk) {
-        setSuccess("Davomat muvaffaqiyatli saqlandi!");
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.ok));
+      if (failed.length === 0) {
+        setSuccess("✓ Davomat muvaffaqiyatli saqlandi!");
+      } else if (failed.length < results.length) {
+        setSuccess("Qisman saqlandi (" + (results.length - failed.length) + "/" + results.length + ")");
       } else {
         setError("Davomatni saqlashda xatolik yuz berdi.");
       }
-    } catch {
-      setError('Server bilan ulanishda xatolik!');
+    } catch(e) {
+      setError('Server bilan ulanishda xatolik: ' + e.message);
     } finally {
       setSaving(false);
     }

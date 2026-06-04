@@ -8,6 +8,22 @@ import {
 
 const BASE = 'https://najot-edu.softwareengineer.uz/api/v1';
 
+// Swagger: GET /api/v1/groups/one/students/{groupId}
+function parseGroupStudents(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.students)) return data.students;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.data)) return data.data;
+  if (data.data && typeof data.data === 'object') {
+    if (Array.isArray(data.data.students)) return data.data.students;
+    if (Array.isArray(data.data.items)) return data.data.items;
+    if (Array.isArray(data.data.results)) return data.data.results;
+  }
+  return [];
+}
+
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function fmtDate(str) {
@@ -140,28 +156,81 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
   }
 
   async function handleSave() {
+    if (!topic.trim()) { setSaveMsg("Mavzuni kiriting!"); return; }
     setSaving(true); setSaveMsg('');
     var token = localStorage.getItem('accessToken');
     var h = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
     var gid = group && group.id;
     try {
-      // POST /api/v1/groups/{groupId}/lesson
-      await fetch(BASE + '/groups/' + gid + '/lesson', {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ group_id: Number(gid), topic: topic.trim() || 'Dars', description: desc.trim() || topic.trim() || 'Dars' }),
-      });
-      // POST /api/v1/attendance for each student
-      await Promise.allSettled(
+      // 1. Shu sanada lesson bor-yo'qligini tekshiramiz
+      // GET /api/v1/groups/{groupId}/lesson?date=YYYY-MM-DD
+      var lessonId = null;
+      try {
+        var checkRes = await fetch(BASE + '/groups/' + gid + '/lesson?date=' + selectedDate, {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        if (checkRes.ok) {
+          var checkData = await checkRes.json();
+          if (checkData) {
+            var checkStr = JSON.stringify(checkData);
+            var checkMatch = checkStr.match(/"id"\s*:\s*(\d+)/);
+            if (checkMatch) lessonId = parseInt(checkMatch[1]);
+          }
+        }
+      } catch(e) { /* ignore */ }
+
+      // 2. Lesson yo'q bo'lsa — yangi yaratamiz
+      // POST /api/v1/groups/{groupId}/lesson → { group_id, topic, description }
+      if (!lessonId) {
+        var lessonRes = await fetch(BASE + '/groups/' + gid + '/lesson', {
+          method: 'POST', headers: h,
+          body: JSON.stringify({
+            group_id: Number(gid),
+            topic: topic.trim(),
+            description: desc.trim() || topic.trim(),
+          }),
+        });
+        if (lessonRes.ok) {
+          var lessonData = await lessonRes.json();
+          var lStr = JSON.stringify(lessonData);
+          var lMatch = lStr.match(/"id"\s*:\s*(\d+)/);
+          if (lMatch) lessonId = parseInt(lMatch[1]);
+        } else {
+          var errText = await lessonRes.text();
+          setSaveMsg("Lesson yaratishda xatolik: " + lessonRes.status + " " + errText);
+          setSaving(false);
+          return;
+        }
+      }
+
+      // 3. Har talaba uchun davomat yuboramiz
+      // POST /api/v1/attendance → { group_id, student_id, isPresent }
+      var results = await Promise.allSettled(
         (students || []).map(function(s) {
           return fetch(BASE + '/attendance', {
             method: 'POST', headers: h,
-            body: JSON.stringify({ group_id: Number(gid), student_id: s.id, isPresent: attendanceData[s.id] === true }),
+            body: JSON.stringify({
+              group_id: Number(gid),
+              student_id: s.id,
+              isPresent: attendanceData[s.id] === true,
+            }),
           });
         })
       );
-      setSaveMsg("Saqlandi!");
+
+      var failed = results.filter(function(r) {
+        return r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok);
+      });
+
+      if (failed.length === 0) {
+        setSaveMsg("✓ Davomat muvaffaqiyatli saqlandi!");
+      } else if (failed.length < results.length) {
+        setSaveMsg("Qisman saqlandi (" + (results.length - failed.length) + "/" + results.length + ")");
+      } else {
+        setSaveMsg("Davomatni saqlashda xatolik!");
+      }
     } catch(e) {
-      setSaveMsg("Xatolik!");
+      setSaveMsg("Xatolik: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -575,6 +644,10 @@ export default function GroupDetail() {
     }).then(function(data) {
       if (data) {
         setGroup(data);
+        var groupStudents = parseGroupStudents(data);
+        if (groupStudents.length > 0) {
+          setStudents(function(prev) { return prev.length > 0 ? prev : groupStudents; });
+        }
         // teachers bo'sh bo'lsa — GET /api/v1/teachers dan qidiramiz
         if (!data.teachers || data.teachers.length === 0) {
           fetch(BASE + '/teachers', { headers })
@@ -599,12 +672,30 @@ export default function GroupDetail() {
       setLoading(false);
     }).catch(function(e) { setError('Xatolik: ' + e.message); setLoading(false); });
 
-    // Students
+    // Students — Swagger: GET /api/v1/groups/one/students/{groupId}
     fetch(BASE + '/groups/one/students/' + id, { headers })
-      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
-        if (Array.isArray(data)) setStudents(data);
-        else if (data && data.students) setStudents(data.students);
+        var list = parseGroupStudents(data);
+        if (list.length > 0) {
+          setStudents(list);
+          return;
+        }
+        // Fallback — Swagger: GET /api/v1/student-group/all
+        return fetch(BASE + '/student-group/all', { headers })
+          .then(function(r2) { return r2.ok ? r2.json() : null; })
+          .then(function(sgData) {
+            if (!sgData) return;
+            var all = Array.isArray(sgData) ? sgData : (sgData.data || sgData.items || []);
+            var matched = all.filter(function(sg) {
+              var gid = sg.group_id || (sg.group && sg.group.id);
+              return String(gid) === String(id);
+            });
+            var mapped = matched.map(function(sg) {
+              return sg.student || sg;
+            }).filter(function(s) { return s && s.id != null; });
+            if (mapped.length > 0) setStudents(mapped);
+          });
       }).catch(function() {});
 
     // Schedules

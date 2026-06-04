@@ -16,35 +16,6 @@ import {
   CalendarTodayOutlined
 } from '@mui/icons-material';
 
-const initialGroups = [
-  {
-    id: 1,
-    status: 'FAOL',
-    name: 'N26',
-    course: 'Backend',
-    duration: '6 oy',
-    time: '09:30',
-    days: 'Du, Se, Chor, Pay, Ju',
-    room: 'Autodesk',
-    teacher: 'Mohirbek',
-    students: 1,
-    active: true,
-  },
-  {
-    id: 2,
-    status: 'FAOL',
-    name: 'n105',
-    course: 'Backend',
-    duration: '6 oy',
-    time: '16:00',
-    days: 'Se, Pay, Shan',
-    room: 'Autodesk',
-    teacher: 'Mohirbek',
-    students: 4,
-    active: true,
-  },
-];
-
 const WEEKDAYS = [
   { label: 'Dushanba', short: 'Du' },
   { label: 'Seshanba', short: 'Se' },
@@ -57,7 +28,7 @@ const WEEKDAYS = [
 
 const Classes = () => {
   const navigate = useNavigate();
-  const [groups, setGroups] = useState(initialGroups);
+  const [groups, setGroups] = useState([]);
   const [activeTab, setActiveTab] = useState('Guruhlar');
   const [courses, setCourses] = useState([]);
   const [rooms, setRooms] = useState([]);
