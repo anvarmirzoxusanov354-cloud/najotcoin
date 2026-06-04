@@ -67,12 +67,17 @@ const ExamSubmission = () => {
 
     try {
       // POST /api/v1/group/{groupId}/homework/{homeworkId}/check
-      // body: { grade, title, homework_answer_id }
-      const answerId = result?.id || result?.homework_answer_id || result?.answer_id;
+      // Swagger: body: { grade: number, title: string, homework_answer_id: number }
+      const answerId = result?.id || result?.homework_answer_id || result?.answer_id || result?.homeworkAnswerId;
+      if (!answerId) {
+        setError("Talabaning javob IDsi topilmadi. Avval talaba javob yuborishi kerak.");
+        setSaving(false);
+        return;
+      }
       const body = {
         grade: Number(score),
         title: comment || homework?.title || 'Baholandi',
-        homework_answer_id: answerId,
+        homework_answer_id: Number(answerId),
       };
 
       const res = await fetch(`${BASE}/group/${groupId}/homework/${homeworkId}/check`, {

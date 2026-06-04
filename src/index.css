@@ -1,1 +1,71 @@
 @import "tailwindcss";
+
+/* ── Dark Mode ── */
+.dark body,
+.dark {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+
+/* Sidebar dark */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+/* Cards, panels dark */
+.dark .bg-\[\#f1f5f9\],
+.dark .bg-\[\#f9fafb\],
+.dark .bg-\[\#fafafa\] {
+  background-color: #0f172a !important;
+}
+
+/* Text dark */
+.dark .text-\[\#1a1a2e\],
+.dark .text-gray-800,
+.dark .text-gray-900 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-\[\#6b7280\],
+.dark .text-\[\#9ca3af\],
+.dark .text-gray-500,
+.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+/* Borders dark */
+.dark .border-\[\#e5e7eb\],
+.dark .border-\[\#f1f1f5\],
+.dark .border-gray-100,
+.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+/* Inputs dark */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+/* Tables dark */
+.dark table tr:hover {
+  background-color: #1e293b !important;
+}
+
+/* Shadows dark */
+.dark .shadow-sm,
+.dark .shadow-\[0_1px_8px_rgba\(0\,0\,0\,0\.06\)\] {
+  box-shadow: 0 1px 8px rgba(0,0,0,0.4) !important;
+}
+
+/* Scrollbar dark */
+.dark ::-webkit-scrollbar {
+  background: #0f172a;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}

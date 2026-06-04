@@ -1,11 +1,12 @@
 
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  HomeOutlined, 
-  PeopleAltOutlined, 
-  SchoolOutlined, 
-  GroupOutlined, 
-  CardGiftcardOutlined, 
+import { useApp } from '../context/AppContext';
+import {
+  HomeOutlined,
+  PeopleAltOutlined,
+  SchoolOutlined,
+  GroupOutlined,
+  CardGiftcardOutlined,
   SettingsOutlined,
   DescriptionOutlined,
   CloseOutlined
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
 const Sidebar = ({ onClose, isCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t, darkMode } = useApp();
 
   const isActive = (path, exact) =>
     exact ? location.pathname === path : location.pathname.startsWith(path);

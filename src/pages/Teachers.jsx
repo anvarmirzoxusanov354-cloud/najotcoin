@@ -37,8 +37,11 @@ const Teachers = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ phone: '+998', email: '', name: '', born: '', guruhlar: [], jinsi: '', avatarName: '' });
+  const [form, setForm] = useState({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '' });
   const [guruhSearch, setGuruhSearch] = useState('');
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState([]);
+  const [tempSelectedGroups, setTempSelectedGroups] = useState([]);
   const [showParol, setShowParol] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [filterGuruh, setFilterGuruh] = useState('');
@@ -187,7 +190,7 @@ const Teachers = () => {
     setDrawerOpen(true);
   };
 
-  const resetForm = () => { setForm({ phone: '+998', email: '', name: '', born: '', guruhlar: [], jinsi: '', avatarName: '', parol: '' }); setGuruhSearch(''); setShowParol(false); };
+  const resetForm = () => { setForm({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '', parol: '' }); setGuruhSearch(''); setShowParol(false); };
   const handleSave = async () => {
     if (!form.name.trim()) return;
     if (editId !== null) {
@@ -350,25 +353,117 @@ const Teachers = () => {
             </div>
           </div>
 
-          {/* Guruh — tag chips input */}
+          {/* Guruh — modal bilan tanlash */}
           <div className="mb-4">
             <label className="block text-[13px] font-semibold text-[#374151] mb-[7px]">Guruh</label>
-            <div className="flex flex-wrap gap-1.5 p-[8px_12px] rounded-[10px] border-[1.5px] border-[#e5e7eb] bg-white items-center min-h-[44px] cursor-text"
-               onClick={() => document.getElementById('guruh-search-input').focus()}>
-              <SearchOutlined className="text-[17px] text-[#9ca3af] shrink-0" />
-              {form.guruhlar.map((g, i) => (
-                <span key={i} className="flex items-center gap-[3px] bg-[#f0ebff] text-[#7c4dff] rounded-[6px] p-[2px_8px] text-[12px] font-semibold">
-                  {g}
-                  <button onClick={() => setForm(prev => ({ ...prev, guruhlar: prev.guruhlar.filter((_, idx) => idx !== i) }))}
-                    className="bg-none border-none cursor-pointer text-[#7c4dff] text-[13px] leading-none p-[0_1px]">×</button>
-                </span>
-              ))}
-              <input id="guruh-search-input" type="text" placeholder={form.guruhlar.length === 0 ? 'Guruh qidiring...' : ''}
-                value={guruhSearch} onChange={e => setGuruhSearch(e.target.value)}
-                onKeyDown={e => { if ((e.key === 'Enter' || e.key === ',') && guruhSearch.trim()) { e.preventDefault(); setForm(prev => ({ ...prev, guruhlar: [...prev.guruhlar, guruhSearch.trim()] })); setGuruhSearch(''); } }}
-                className="border-none outline-none text-[13px] flex-1 min-w-[80px] p-[2px_0]" />
-            </div>
-            <p className="m-0 mt-1 text-[11.5px] text-[#9ca3af]">Enter yoki vergul bilan guruh qo'shing</p>
+
+            {/* Group selection modal */}
+            {groupModalOpen && (
+              <>
+                <div onClick={() => { setGroupModalOpen(false); setGuruhSearch(''); }}
+                  className="fixed inset-0 z-[1300] bg-black/40" />
+                <div className="fixed inset-0 z-[1310] flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-w-[480px] w-full overflow-hidden flex flex-col max-h-[80vh]">
+                    <div className="px-6 py-5 border-b border-[#e5e7eb] flex items-start justify-between shrink-0">
+                      <div>
+                        <h2 className="m-0 text-[18px] font-bold text-[#1a1a2e] mb-1">Guruh qo'shish</h2>
+                        <p className="m-0 text-[13px] text-[#6b7280]">Bitta yoki bir nechta guruhni tanlang</p>
+                      </div>
+                      <button onClick={() => { setGroupModalOpen(false); setGuruhSearch(''); }}
+                        className="bg-transparent border-none cursor-pointer text-[#9ca3af] hover:text-[#1a1a2e] p-1">×</button>
+                    </div>
+                    <div className="px-6 py-3 border-b border-[#e5e7eb] shrink-0">
+                      <div className="relative">
+                        <SearchOutlined style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#9ca3af' }} />
+                        <input type="text" placeholder="Guruh qidirish..."
+                          value={guruhSearch} onChange={e => setGuruhSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-[10px] text-[13px] outline-none focus:border-[#7c4dff]" />
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                      {availableGroups.length === 0 ? (
+                        <div className="py-10 text-center text-[#9ca3af] text-[13px]">Guruhlar yuklanmoqda...</div>
+                      ) : availableGroups.filter(g => g.name.toLowerCase().includes(guruhSearch.toLowerCase())).length === 0 ? (
+                        <div className="py-10 text-center text-[#9ca3af] text-[13px]">Guruh topilmadi</div>
+                      ) : availableGroups.filter(g => g.name.toLowerCase().includes(guruhSearch.toLowerCase())).map(group => {
+                        const isSelected = tempSelectedGroups.some(g => g.id === group.id);
+                        return (
+                          <div key={group.id} onClick={() => setTempSelectedGroups(prev =>
+                            prev.some(g => g.id === group.id) ? prev.filter(g => g.id !== group.id) : [...prev, group]
+                          )}
+                            className={`px-6 py-3 flex items-center gap-3 cursor-pointer border-b border-[#f3f4f6] transition-colors ${isSelected ? 'bg-[#f5f0ff]' : 'hover:bg-[#f9fafb]'}`}>
+                            <input type="checkbox" checked={isSelected} readOnly
+                              className="w-4 h-4 accent-[#7c4dff] cursor-pointer" />
+                            <span className="text-[13px] text-[#1a1a2e] font-medium">{group.name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="px-6 py-4 flex gap-3 justify-end bg-[#f9fafb] border-t border-[#e5e7eb] shrink-0">
+                      <button onClick={() => { setGroupModalOpen(false); setGuruhSearch(''); }}
+                        className="px-5 py-2 rounded-[10px] border border-[#d1d5db] bg-white text-[#1a1a2e] font-semibold text-[13px] cursor-pointer">
+                        Bekor qilish
+                      </button>
+                      <button onClick={() => {
+                        setForm(p => ({
+                          ...p,
+                          guruhlar: tempSelectedGroups.map(g => g.name),
+                          guruhIds: tempSelectedGroups.map(g => g.id),
+                        }));
+                        setGroupModalOpen(false);
+                        setGuruhSearch('');
+                      }}
+                        className="px-5 py-2 rounded-[10px] border-none bg-[#7c4dff] text-white font-semibold text-[13px] cursor-pointer">
+                        Saqlash ({tempSelectedGroups.length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <button type="button"
+              onClick={() => {
+                // Modal ochilganda mavjud guruhlarni yuklash
+                if (availableGroups.length === 0) {
+                  const token = localStorage.getItem('accessToken');
+                  fetch('https://najot-edu.softwareengineer.uz/api/v1/groups/all', {
+                    headers: { Authorization: 'Bearer ' + token }
+                  }).then(r => r.ok ? r.json() : null).then(data => {
+                    let list = [];
+                    if (Array.isArray(data)) list = data;
+                    else if (data?.data) list = Array.isArray(data.data) ? data.data : (data.data.items || []);
+                    else if (data?.items) list = data.items;
+                    setAvailableGroups(list.map(g => ({ id: g.id, name: g.name || g.group_name || '' })));
+                  }).catch(() => {});
+                }
+                // Mavjud tanlangan guruhlarni tempga o'tkazish
+                const currentIds = form.guruhIds || [];
+                const currentNames = form.guruhlar || [];
+                setTempSelectedGroups(currentIds.map((id, i) => ({ id, name: currentNames[i] || '' })));
+                setGuruhSearch('');
+                setGroupModalOpen(true);
+              }}
+              className="w-full flex items-center justify-start gap-2 p-[12px_14px] rounded-[10px] border-[1.5px] border-[#e5e7eb] bg-white cursor-pointer hover:border-[#7c4dff] transition-colors">
+              <span className="text-[#7c4dff] font-bold text-[18px] leading-none">+</span>
+              <span className="text-[#7c4dff] font-bold text-[14px]">Guruh qo'shish</span>
+            </button>
+            {form.guruhlar.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {form.guruhlar.map((g, i) => (
+                  <span key={i} className="flex items-center gap-1 bg-[#f0ebff] text-[#7c4dff] rounded-[6px] px-2 py-0.5 text-[12px] font-semibold">
+                    {g}
+                    <button type="button"
+                      onClick={() => setForm(p => ({
+                        ...p,
+                        guruhlar: p.guruhlar.filter((_, idx) => idx !== i),
+                        guruhIds: (p.guruhIds || []).filter((_, idx) => idx !== i),
+                      }))}
+                      className="bg-none border-none cursor-pointer text-[#7c4dff] hover:text-red-500 text-[13px] leading-none">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Jinsi */}

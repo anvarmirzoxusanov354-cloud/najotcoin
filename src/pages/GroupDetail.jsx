@@ -30,25 +30,37 @@ function fmtDateTime(str) {
 
 function generateLessonDates(group) {
   if (!group) return [];
-  var startDateStr = group.start_date || group.startDate || group.created_at || null;
+
+  // start_date: faqat real start_date ishlatamiz, created_at ga fallback qilmaymiz
+  var startDateStr = group.start_date || group.startDate || null;
   if (!startDateStr) return [];
+
   var weekDayMap = { MONDAY:1, TUESDAY:2, WEDNESDAY:3, THURSDAY:4, FRIDAY:5, SATURDAY:6, SUNDAY:0 };
-  var rawDays = group.week_day || group.week_days || group.weekDay || group.days || null;
+  var rawDays = group.week_day || group.week_days || group.weekDay || group.weekdays || group.days || null;
   var weekDays = [];
+
   if (rawDays) {
-    (Array.isArray(rawDays) ? rawDays : String(rawDays).split(',')).forEach(function(d) {
+    // Array yoki string bo'lishi mumkin: ["MONDAY"] yoki "MONDAY,WEDNESDAY" yoki "MONDAY WEDNESDAY"
+    var arr = Array.isArray(rawDays) ? rawDays : String(rawDays).replace(/\s+/g, ',').split(',');
+    arr.forEach(function(d) {
       var t = String(d).trim().toUpperCase();
       if (weekDayMap[t] !== undefined) weekDays.push(weekDayMap[t]);
     });
   }
-  if (weekDays.length === 0) weekDays = [1, 3, 5];
+
+  // Hafta kunlari topilmasa — sanalar ko'rsatmaymiz (noto'g'ri default qo'ymaymiz)
+  if (weekDays.length === 0) return [];
+
   var duration = group.duration_month || group.duration || 6;
   var startDate = new Date(startDateStr);
   if (isNaN(startDate)) return [];
+
   var endDate = new Date(startDate);
   endDate.setMonth(endDate.getMonth() + Number(duration));
+
   var today = new Date(); today.setHours(23,59,59,999);
   var dates = [], cur = new Date(startDate);
+
   while (cur <= endDate) {
     if (weekDays.indexOf(cur.getDay()) !== -1) {
       dates.push({ date: new Date(cur), passed: cur <= today });
@@ -71,8 +83,15 @@ function groupByLearningMonth(dates, startDate) {
   return groups.filter(Boolean);
 }
 
-function ScheduleTable({ schedules, teacherName, group }) {
+function ScheduleTable({ schedules, teacherName, group, students }) {
   var [showAll, setShowAll] = useState(false);
+  var [selectedDate, setSelectedDate] = useState(null);
+  var [attendanceData, setAttendanceData] = useState({});
+  var [topic, setTopic] = useState('');
+  var [desc, setDesc] = useState('');
+  var [saving, setSaving] = useState(false);
+  var [saveMsg, setSaveMsg] = useState('');
+  var [lessonStatus, setLessonStatus] = useState("Dars o'tilgan");
   var allDates = generateLessonDates(group);
   var startDateStr = group && (group.start_date || group.startDate);
   var monthGroups = startDateStr ? groupByLearningMonth(allDates, startDateStr) : [];
@@ -100,6 +119,54 @@ function ScheduleTable({ schedules, teacherName, group }) {
       room_name: roomName,
     }];
   }
+
+  function handleDateClick(dateStr) {
+    if (selectedDate === dateStr) { setSelectedDate(null); return; }
+    setSelectedDate(dateStr);
+    setSaveMsg(''); setTopic(''); setDesc('');
+    setLessonStatus("Dars o'tilgan");
+    var init = {};
+    (students || []).forEach(function(s) { init[s.id] = false; });
+    setAttendanceData(init);
+  }
+
+  function fmtDisplayDate(ds) {
+    if (!ds) return '';
+    try {
+      var d = new Date(ds + 'T00:00:00');
+      var months = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+      return d.getFullYear() + ' ' + months[d.getMonth()] + ' ' + String(d.getDate()).padStart(2,'0');
+    } catch(e) { return ds; }
+  }
+
+  async function handleSave() {
+    setSaving(true); setSaveMsg('');
+    var token = localStorage.getItem('accessToken');
+    var h = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+    var gid = group && group.id;
+    try {
+      // POST /api/v1/groups/{groupId}/lesson
+      await fetch(BASE + '/groups/' + gid + '/lesson', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ group_id: Number(gid), topic: topic.trim() || 'Dars', description: desc.trim() || topic.trim() || 'Dars' }),
+      });
+      // POST /api/v1/attendance for each student
+      await Promise.allSettled(
+        (students || []).map(function(s) {
+          return fetch(BASE + '/attendance', {
+            method: 'POST', headers: h,
+            body: JSON.stringify({ group_id: Number(gid), student_id: s.id, isPresent: attendanceData[s.id] === true }),
+          });
+        })
+      );
+      setSaveMsg("Saqlandi!");
+    } catch(e) {
+      setSaveMsg("Xatolik!");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div style={{ background:'white', borderRadius:12, boxShadow:'0 1px 8px rgba(0,0,0,0.06)', padding:24 }}>
       <h2 style={{ fontSize:16, fontWeight:700, color:'#1a1a2e', marginBottom:16, marginTop:0 }}>Dars jadvali</h2>
@@ -132,16 +199,148 @@ function ScheduleTable({ schedules, teacherName, group }) {
               <span style={{ fontSize:15, fontWeight:700, color:'#1a1a2e' }}>{mg.monthNum}-o'quv oyi</span>
               {isCur && <span style={{ fontSize:11, fontWeight:600, padding:'2px 10px', borderRadius:20, background:'#dcfce7', color:'#16a34a', border:'1px solid #bbf7d0' }}>Joriy oy</span>}
             </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
               {mg.dates.map(function(item, dIdx) {
+                var d = item.date;
+                var isToday = d.toDateString() === new Date().toDateString();
+                var isFuture = !item.passed;
+                var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                var canClick = item.passed;
+                var isSelected = selectedDate === ds;
                 return (
-                  <div key={dIdx} style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', width:52, height:58, borderRadius:10, fontSize:11.5, fontWeight:700, userSelect:'none', border: item.passed ? '1px solid #cbd5e1' : '1px solid #e5e7eb', background: item.passed ? '#e2e8f0' : 'white', color: item.passed ? '#475569' : '#9ca3af', opacity: item.passed ? 1 : 0.7 }}>
-                    <span style={{ fontSize:10.5, marginBottom:2 }}>{MONTH_NAMES[item.date.getMonth()]}</span>
-                    <span style={{ fontSize:14 }}>{item.date.getDate()}</span>
+                  <div key={dIdx}
+                    onClick={canClick ? function(){ handleDateClick(ds); } : undefined}
+                    style={{
+                      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                      width:52, height:58, borderRadius:10, fontSize:11.5, fontWeight:700, userSelect:'none',
+                      cursor: canClick ? 'pointer' : 'default',
+                      border: isSelected ? '2px solid #7c4dff' : (isToday ? '2px solid #7c4dff' : (item.passed ? '1px solid #cbd5e1' : '1px solid #e5e7eb')),
+                      background: isSelected ? '#7c4dff' : (isToday ? '#7c4dff' : (item.passed ? '#e2e8f0' : 'white')),
+                      color: (isSelected || isToday) ? 'white' : (item.passed ? '#475569' : '#9ca3af'),
+                      opacity: isFuture ? 0.5 : 1,
+                      transition: 'all 0.15s',
+                    }}>
+                    <span style={{ fontSize:10.5, marginBottom:2 }}>{MONTH_NAMES[d.getMonth()]}</span>
+                    <span style={{ fontSize:14 }}>{d.getDate()}</span>
                   </div>
                 );
               })}
             </div>
+
+            {/* Inline davomat paneli */}
+            {selectedDate && mg.dates.some(function(item) {
+              var d = item.date;
+              var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+              return ds === selectedDate;
+            }) && (
+              <div style={{ border:'1.5px solid #e5e7eb', borderRadius:12, overflow:'hidden', background:'white', marginTop:8 }}>
+                {/* Teacher + sana + holat */}
+                <div style={{ padding:'14px 20px', borderBottom:'1px solid #f1f1f5', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:'#ede9ff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:14, color:'#7c4dff', flexShrink:0 }}>
+                      {teacherName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:13.5, fontWeight:700, color:'#1a1a2e' }}>{teacherName}</div>
+                      <div style={{ fontSize:11, color:'#9ca3af' }}>Teacher</div>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
+                    <div>
+                      <div style={{ fontSize:10, color:'#9ca3af', fontWeight:500, marginBottom:2 }}>DARS KUNI</div>
+                      <div style={{ fontSize:12.5, fontWeight:700, color:'#1a1a2e' }}>{fmtDisplayDate(selectedDate)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:10, color:'#9ca3af', fontWeight:500, marginBottom:2 }}>HOLAT</div>
+                      <button onClick={function(){ setLessonStatus(function(p){ return p === "Dars o'tilgan" ? "Dars bo'lmagan" : "Dars o'tilgan"; }); }}
+                        style={{ fontSize:12.5, fontWeight:700, cursor:'pointer', color: lessonStatus === "Dars o'tilgan" ? '#16a34a' : '#ef4444', background:'none', border:'none', padding:0 }}>
+                        {lessonStatus}
+                      </button>
+                    </div>
+                    <button onClick={function(){ setSelectedDate(null); setSaveMsg(''); }}
+                      style={{ background:'none', border:'none', cursor:'pointer', color:'#9ca3af', fontSize:18 }}>×</button>
+                  </div>
+                </div>
+
+                {/* Mavzu va tavsif */}
+                <div style={{ padding:'14px 20px', borderBottom:'1px solid #f1f1f5' }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>Yo'qlama va mavzu kiritish</div>
+                  <div style={{ display:'flex', gap:16, marginBottom:10 }}>
+                    {[{v:'plan',l:"O'quv reja bo'yicha"},{v:'other',l:'Boshqa'}].map(function(o){
+                      return (
+                        <label key={o.v} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:12.5 }}>
+                          <input type="radio" checked={o.v==='other'} readOnly style={{ accentColor:'#7c4dff', width:13, height:13 }} />
+                          <span style={{ color: o.v==='other' ? '#7c4dff' : '#6b7280', fontWeight: o.v==='other' ? 600 : 400 }}>{o.l}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ fontSize:11.5, fontWeight:600, color:'#ef4444', marginBottom:4 }}>* Mavzu</div>
+                    <input type="text" placeholder="Mavzuni kiriting..." value={topic} onChange={function(e){ setTopic(e.target.value); }}
+                      style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', boxSizing:'border-box' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, fontWeight:600, color:'#6b7280', marginBottom:4 }}>Tavsif (ixtiyoriy)</div>
+                    <textarea placeholder="Dars haqida qo'shimcha ma'lumot..." value={desc} onChange={function(e){ setDesc(e.target.value); }}
+                      rows={3} style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', resize:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+                  </div>
+                </div>
+
+                {/* Talabalar jadval */}
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                  <thead>
+                    <tr style={{ background:'#f9fafb', borderBottom:'1px solid #f1f1f5' }}>
+                      <th style={{ padding:'10px 20px', textAlign:'left', fontWeight:600, color:'#9ca3af', fontSize:11.5, width:40 }}>#</th>
+                      <th style={{ padding:'10px 16px', textAlign:'left', fontWeight:600, color:'#7c4dff', fontSize:11.5 }}>O'quvchi ismi</th>
+                      <th style={{ padding:'10px 20px', textAlign:'right', fontWeight:600, color:'#374151', fontSize:11.5 }}>Keldi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!students || students.length === 0 ? (
+                      <tr><td colSpan={3} style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:12.5 }}>Talabalar yo'q</td></tr>
+                    ) : students.map(function(s, idx) {
+                      var name = s.full_name || ((s.first_name||'') + ' ' + (s.last_name||'')).trim() || s.name || "Noma'lum";
+                      var isPresent = attendanceData[s.id] === true;
+                      return (
+                        <tr key={s.id || idx} style={{ borderBottom:'1px solid #f5f5f7', background:'white' }}
+                          onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
+                          onMouseLeave={function(e){ e.currentTarget.style.background='white'; }}>
+                          <td style={{ padding:'11px 20px', color:'#9ca3af', fontWeight:500 }}>{idx+1}</td>
+                          <td style={{ padding:'11px 16px' }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                              <div style={{ width:30, height:30, borderRadius:'50%', background:'#ede9ff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#7c4dff', flexShrink:0 }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              <span style={{ fontWeight:600, color:'#1a1a2e', fontSize:13 }}>{name}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding:'11px 20px', textAlign:'right' }}>
+                            <div onClick={function(){ setAttendanceData(function(p){ var n = Object.assign({}, p); n[s.id] = !n[s.id]; return n; }); }}
+                              style={{ display:'inline-flex', width:42, height:23, borderRadius:12, cursor:'pointer', background: isPresent ? '#7c4dff' : '#d1d5db', position:'relative', transition:'background 0.2s' }}>
+                              <div style={{ position:'absolute', top:2, left: isPresent ? 20 : 2, width:19, height:19, borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Footer */}
+                <div style={{ padding:'12px 20px', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12, background:'#f9fafb', borderTop:'1px solid #f1f1f5' }}>
+                  {saveMsg && <span style={{ fontSize:12.5, fontWeight:600, color: saveMsg.includes('xato') ? '#ef4444' : '#16a34a' }}>{saveMsg}</span>}
+                  <button onClick={function(){ setSelectedDate(null); setSaveMsg(''); }}
+                    style={{ padding:'8px 20px', borderRadius:8, border:'1.5px solid #e5e7eb', background:'white', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    Bekor qilish
+                  </button>
+                  <button onClick={handleSave} disabled={saving}
+                    style={{ padding:'8px 24px', borderRadius:8, border:'none', background: saving ? '#9ca3af' : '#7c4dff', color:'white', fontSize:13, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                    {saving ? 'Saqlanmoqda...' : 'Saqlash'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -194,8 +393,7 @@ export default function GroupDetail() {
         if (r.status === 'fulfilled' && r.value.ok) {
           promises.push(r.value.json().then(function(d) {
             if (!found && d) {
-              // data nested bo'lishi mumkin: { data: {...} }
-              found = d.data && typeof d.data === 'object' && !Array.isArray(d.data) ? d.data : d;
+              found = (d.data && typeof d.data === 'object' && !Array.isArray(d.data)) ? d.data : d;
             }
           }));
         }
@@ -203,14 +401,14 @@ export default function GroupDetail() {
       return Promise.all(promises).then(function() { return found; });
     }).then(function(data) {
       if (data) {
-        // teachers array yo'q yoki bo'sh bo'lsa — teachers endpointdan qidiramiz
+        setGroup(data);
+        // teachers bo'sh bo'lsa — GET /api/v1/teachers dan qidiramiz
         if (!data.teachers || data.teachers.length === 0) {
           fetch(BASE + '/teachers', { headers })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(tData) {
               if (!tData) return;
               var list = Array.isArray(tData) ? tData : (tData.data || tData.teachers || []);
-              // guruh ID si bilan mos o'qituvchilarni topamiz
               var matched = list.filter(function(t) {
                 if (!t.groups) return false;
                 return t.groups.some(function(g) {
@@ -218,11 +416,10 @@ export default function GroupDetail() {
                 });
               });
               if (matched.length > 0) {
-                setGroup(function(prev) { return prev ? { ...prev, teachers: matched } : prev; });
+                setGroup(function(prev) { return prev ? Object.assign({}, prev, { teachers: matched }) : prev; });
               }
             }).catch(function() {});
         }
-        setGroup(data);
       } else {
         setError('Guruh topilmadi');
       }
@@ -406,7 +603,7 @@ export default function GroupDetail() {
               </div>
             </div>
           </div>
-          <ScheduleTable schedules={schedules} teacherName={teacherName} group={group} />
+          <ScheduleTable schedules={schedules} teacherName={teacherName} group={group} students={students} />
         </div>
       )}
 
@@ -530,17 +727,29 @@ export default function GroupDetail() {
                           if (!topic) { alert("Iltimos, dars mavzusini kiriting!"); return; }
                           var token = localStorage.getItem('accessToken');
                           var headers2 = { Authorization: 'Bearer ' + token };
-                          // 1. Avval lesson yaratamiz
+
+                          // 1. Lesson yaratish: POST /api/v1/groups/{groupId}/lesson
                           fetch(BASE + '/groups/' + id + '/lesson', {
                             method: 'POST',
                             headers: { ...headers2, 'Content-Type': 'application/json' },
                             body: JSON.stringify({ group_id: Number(id), topic: topic, description: topic }),
                           })
-                          .then(function(r) { return r.ok ? r.json() : null; })
+                          .then(function(r) {
+                            if (!r.ok) throw new Error('Lesson yaratishda xatolik: ' + r.status);
+                            return r.json();
+                          })
                           .then(function(lessonData) {
-                            var lessonId = lessonData && (lessonData.id || (lessonData.data && lessonData.data.id));
-                            if (!lessonId) { alert("Lesson yaratishda xatolik!"); return; }
-                            // 2. Faylni yuklaymiz
+                            // Barcha nested formatlarni tekshiramiz
+                            var lessonId = null;
+                            if (lessonData) {
+                              var str = JSON.stringify(lessonData);
+                              var match = str.match(/"id"\s*:\s*(\d+)/);
+                              if (match) lessonId = parseInt(match[1]);
+                            }
+                            if (!lessonId) { alert("Lesson ID topilmadi! Server javobi: " + JSON.stringify(lessonData)); return; }
+
+                            // 2. Fayl yuklash: POST /api/v1/files/group/{grupId}/upload?lessonId=X
+                            // Swagger: "grupId" (typo bilan) — shunaqa endpoint
                             var fd = new FormData();
                             fd.append('file', file);
                             return fetch(BASE + '/files/group/' + id + '/upload?lessonId=' + lessonId, {
@@ -548,13 +757,28 @@ export default function GroupDetail() {
                               headers: headers2,
                               body: fd,
                             })
-                            .then(function(r) { return r.ok ? r.json() : null; })
+                            .then(function(r) {
+                              if (!r.ok) return r.text().then(function(t) { throw new Error('Fayl yuklashda xatolik ' + r.status + ': ' + t); });
+                              return r.json();
+                            })
                             .then(function(data) {
-                              if (data) setVideos(function(p) { return [data.data || data, ...p]; });
+                              if (data) {
+                                var fileObj = data.data || data;
+                                setVideos(function(p) { return [fileObj, ...p]; });
+                              }
+                              // Ro'yxatni qayta yuklaymiz
+                              fetch(BASE + '/files/' + id, { headers: headers2 })
+                                .then(function(r) { return r.ok ? r.json() : null; })
+                                .then(function(d) {
+                                  if (d) setVideos(Array.isArray(d) ? d : (d.data || d.files || d.items || []));
+                                }).catch(function(){});
                               setVideoUploadOpen(false);
                             });
                           })
-                          .catch(function(err) { alert('Xatolik: ' + err.message); setVideoUploadOpen(false); });
+                          .catch(function(err) {
+                            alert('Xatolik: ' + err.message);
+                            setVideoUploadOpen(false);
+                          });
                         }} />
                       </label>
                       <div style={{ marginTop:14, textAlign:'right' }}>

@@ -69,32 +69,22 @@ const AddStudentsToGroup = () => {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     try {
-      // POST /api/v1/groups/{id}/students
-      const res = await fetch(`${BASE}/groups/${id}/students`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ students: selectedStudents }),
-      });
-      if (res.ok) {
+      // POST /api/v1/student-group — Swagger: { student_id, group_id }
+      const results = await Promise.allSettled(
+        selectedStudents.map(async (sid) => {
+          const r = await fetch(`${BASE}/student-group`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ student_id: sid, group_id: Number(id) }),
+          });
+          return r;
+        })
+      );
+      const anyOk = results.some(r => r.status === 'fulfilled' && r.value?.ok);
+      if (anyOk) {
         navigate(`/classes/${id}`);
       } else {
-        // Fallback: har bir talabani alohida qo'shamiz
-        let anyOk = false;
-        await Promise.all(selectedStudents.map(async (sid) => {
-          try {
-            const r = await fetch(`${BASE}/groups/${id}/students`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ student_id: sid }),
-            });
-            if (r.ok) anyOk = true;
-          } catch { /* ignore */ }
-        }));
-        if (anyOk) navigate(`/classes/${id}`);
-        else {
-          try { const err = await res.json(); setError(err.message || `Xatolik: ${res.status}`); }
-          catch { setError(`Xatolik: ${res.status}`); }
-        }
+        setError('Talabalarni qo\'shishda xatolik yuz berdi.');
       }
     } catch {
       setError('Server bilan ulanishda xatolik!');

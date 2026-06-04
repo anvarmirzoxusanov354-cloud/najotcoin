@@ -18,13 +18,6 @@ import {
 const menuItems = [
   { icon: <SchoolOutlined fontSize="small" />, label: 'Kurslar' },
   { icon: <MeetingRoomOutlined fontSize="small" />, label: 'Xonalar' },
-  { icon: <AccountBalanceOutlined fontSize="small" />, label: 'Filiallar' },
-  { icon: <PeopleAltOutlined fontSize="small" />, label: 'Hodimlar' },
-  { icon: <AdminPanelSettingsOutlined fontSize="small" />, label: 'Rollar' },
-  { icon: <ReportProblemOutlined fontSize="small" />, label: 'Sabablar' },
-  { icon: <SendOutlined fontSize="small" />, label: 'Xabar yuborish' },
-  { icon: <HelpOutlineOutlined fontSize="small" />, label: 'FAQ' },
-  { icon: <FactCheckOutlined fontSize="small" />, label: 'Tekshiruv' },
 ];
 
 const filialTabs = ['Filial 1', 'Filial 2', 'Arxiv'];
