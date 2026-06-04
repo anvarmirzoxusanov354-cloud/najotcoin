@@ -24,11 +24,25 @@ const LabelBadge = ({ text, idx }) => (
   </span>
 );
 
-const Avatar = ({ name }) => (
-  <div className="w-8 h-8 rounded-full bg-[#ede9ff] flex items-center justify-center font-bold text-[13px] text-[#7c4dff] shrink-0">
-    {name?.charAt(0)?.toUpperCase() || 'Q'}
-  </div>
-);
+const BASE_STATIC = 'https://najot-edu.softwareengineer.uz';
+
+function getPhotoUrl(photo) {
+  if (!photo) return null;
+  if (photo.startsWith('http')) return photo;
+  if (photo.startsWith('/')) return BASE_STATIC + photo;
+  return BASE_STATIC + '/' + photo;
+}
+
+const Avatar = ({ name, photo }) => {
+  const url = getPhotoUrl(photo);
+  return (
+    <div className="w-8 h-8 rounded-full bg-[#ede9ff] flex items-center justify-center font-bold text-[13px] text-[#7c4dff] shrink-0 overflow-hidden">
+      {url
+        ? <img src={url} alt={name} className="w-full h-full object-cover" onError={function(e){ e.target.style.display='none'; }} />
+        : (name?.charAt(0)?.toUpperCase() || 'Q')}
+    </div>
+  );
+};
 
 const Teachers = () => {
   const [teachers, setTeachers] = useState([]);
@@ -628,7 +642,7 @@ const Teachers = () => {
                   {/* Name + labels */}
                   <td className="p-[10px_10px]">
                     <div className="flex items-center gap-2">
-                      <Avatar name={t.name} />
+                      <Avatar name={t.name} photo={t.avatar} />
                       <div>
                         <div className="font-semibold text-[#1a1a2e] text-[13px] mb-[3px]">{t.name}</div>
                         <div className="flex gap-1 flex-wrap">

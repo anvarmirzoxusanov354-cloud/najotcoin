@@ -145,7 +145,14 @@ const KurslarContent = () => {
             price: form.narx ? `${form.narx} so'm` : c.price,
           } : c));
         } else {
-          try { const err = await res.json(); alert(err.message || `Xatolik: ${res.status}`); } catch { alert(`Xatolik: ${res.status}`); }
+          try {
+            const err = await res.json();
+            const rawMsg = Array.isArray(err.message) ? err.message.join(', ') : (err.message || '');
+            const msg = rawMsg.toLowerCase().includes('already exist') || rawMsg.toLowerCase().includes('exists')
+              ? `"${form.nomi}" nomli kurs allaqachon mavjud. Boshqa nom bering.`
+              : rawMsg || `Xatolik: ${res.status}`;
+            alert(msg);
+          } catch { alert(`Xatolik: ${res.status}`); }
           return;
         }
       } catch { alert('Server bilan ulanishda xatolik!'); return; }
@@ -168,7 +175,14 @@ const KurslarContent = () => {
             bg: bgColors[idx], border: borderColors[idx],
           }]);
         } else {
-          try { const err = await res.json(); alert(err.message || `Xatolik: ${res.status}`); } catch { alert(`Xatolik: ${res.status}`); }
+          try {
+            const err = await res.json();
+            const rawMsg = Array.isArray(err.message) ? err.message.join(', ') : (err.message || '');
+            const msg = rawMsg.toLowerCase().includes('already exist') || rawMsg.toLowerCase().includes('exists')
+              ? `"${form.nomi}" nomli kurs allaqachon mavjud. Boshqa nom bering.`
+              : rawMsg || `Xatolik: ${res.status}`;
+            alert(msg);
+          } catch { alert(`Xatolik: ${res.status}`); }
           return;
         }
       } catch { alert('Server bilan ulanishda xatolik!'); return; }

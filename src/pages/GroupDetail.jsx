@@ -7,6 +7,18 @@ import {
 } from '@mui/icons-material';
 
 const BASE = 'https://najot-edu.softwareengineer.uz/api/v1';
+const BASE_STATIC = 'https://najot-edu.softwareengineer.uz'; // fayl va rasm URL uchun
+
+// Rasm/video URL yasash
+function getPhotoUrl(photo) {
+  if (!photo) return null;
+  if (photo.startsWith('http')) return photo;
+  if (photo.startsWith('/')) return BASE_STATIC + photo;
+  return BASE_STATIC + '/' + photo;
+}
+function getFileUrl(file) {
+  return getPhotoUrl(file);
+}
 
 // Swagger: GET /api/v1/groups/one/students/{groupId}
 function parseGroupStudents(data) {
@@ -144,6 +156,14 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
     var init = {};
     (students || []).forEach(function(s) { init[s.id] = false; });
     setAttendanceData(init);
+  }
+
+  // Faqat bugungi kun uchun davomat kiritish mumkin
+  function isDateToday(dateStr) {
+    if (!dateStr) return false;
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    return dateStr === todayStr;
   }
 
   function fmtDisplayDate(ds) {
@@ -337,7 +357,7 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
                   <div style={{ display:'flex', gap:16, marginBottom:10 }}>
                     {[{v:'plan',l:"O'quv reja bo'yicha"},{v:'other',l:'Boshqa'}].map(function(o){
                       return (
-                        <label key={o.v} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:12.5 }}>
+                        <label key={o.v} style={{ display:'flex', alignItems:'center', gap:5, cursor: isDateToday(selectedDate) ? 'pointer' : 'default', fontSize:12.5 }}>
                           <input type="radio" checked={o.v==='other'} readOnly style={{ accentColor:'#7c4dff', width:13, height:13 }} />
                           <span style={{ color: o.v==='other' ? '#7c4dff' : '#6b7280', fontWeight: o.v==='other' ? 600 : 400 }}>{o.l}</span>
                         </label>
@@ -346,14 +366,23 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
                   </div>
                   <div style={{ marginBottom:8 }}>
                     <div style={{ fontSize:11.5, fontWeight:600, color:'#ef4444', marginBottom:4 }}>* Mavzu</div>
-                    <input type="text" placeholder="Mavzuni kiriting..." value={topic} onChange={function(e){ setTopic(e.target.value); }}
-                      style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', boxSizing:'border-box' }} />
+                    <input type="text" placeholder="Mavzuni kiriting..." value={topic}
+                      onChange={function(e){ if(isDateToday(selectedDate)) setTopic(e.target.value); }}
+                      disabled={!isDateToday(selectedDate)}
+                      style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', boxSizing:'border-box', background: isDateToday(selectedDate) ? 'white' : '#f9fafb', opacity: isDateToday(selectedDate) ? 1 : 0.7 }} />
                   </div>
                   <div>
                     <div style={{ fontSize:11.5, fontWeight:600, color:'#6b7280', marginBottom:4 }}>Tavsif (ixtiyoriy)</div>
-                    <textarea placeholder="Dars haqida qo'shimcha ma'lumot..." value={desc} onChange={function(e){ setDesc(e.target.value); }}
-                      rows={3} style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', resize:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+                    <textarea placeholder="Dars haqida qo'shimcha ma'lumot..." value={desc}
+                      onChange={function(e){ if(isDateToday(selectedDate)) setDesc(e.target.value); }}
+                      disabled={!isDateToday(selectedDate)}
+                      rows={3} style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', resize:'none', fontFamily:'inherit', boxSizing:'border-box', background: isDateToday(selectedDate) ? 'white' : '#f9fafb', opacity: isDateToday(selectedDate) ? 1 : 0.7 }} />
                   </div>
+                  {!isDateToday(selectedDate) && (
+                    <div style={{ marginTop:8, padding:'6px 12px', background:'#fff7ed', borderRadius:6, fontSize:12, color:'#f97316', fontWeight:500 }}>
+                      Bu kun uchun davomat kiritib bo'lmaydi. Faqat bugungi dars sanasi uchun davomat qilinadi.
+                    </div>
+                  )}
                 </div>
 
                 {/* Talabalar jadval */}
@@ -370,7 +399,9 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
                       <tr><td colSpan={3} style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:12.5 }}>Talabalar yo'q</td></tr>
                     ) : students.map(function(s, idx) {
                       var name = s.full_name || ((s.first_name||'') + ' ' + (s.last_name||'')).trim() || s.name || "Noma'lum";
+                      var photoUrl = getPhotoUrl(s.photo || s.avatar || s.image);
                       var isPresent = attendanceData[s.id] === true;
+                      var canToggle = isDateToday(selectedDate);
                       return (
                         <tr key={s.id || idx} style={{ borderBottom:'1px solid #f5f5f7', background:'white' }}
                           onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
@@ -378,15 +409,17 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
                           <td style={{ padding:'11px 20px', color:'#9ca3af', fontWeight:500 }}>{idx+1}</td>
                           <td style={{ padding:'11px 16px' }}>
                             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                              <div style={{ width:30, height:30, borderRadius:'50%', background:'#ede9ff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#7c4dff', flexShrink:0 }}>
-                                {name.charAt(0).toUpperCase()}
+                              <div style={{ width:30, height:30, borderRadius:'50%', background:'#ede9ff', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#7c4dff', flexShrink:0 }}>
+                                {photoUrl
+                                  ? <img src={photoUrl} alt={name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={function(e){ e.target.style.display='none'; }} />
+                                  : name.charAt(0).toUpperCase()}
                               </div>
                               <span style={{ fontWeight:600, color:'#1a1a2e', fontSize:13 }}>{name}</span>
                             </div>
                           </td>
                           <td style={{ padding:'11px 20px', textAlign:'right' }}>
-                            <div onClick={function(){ setAttendanceData(function(p){ var n = Object.assign({}, p); n[s.id] = !n[s.id]; return n; }); }}
-                              style={{ display:'inline-flex', width:42, height:23, borderRadius:12, cursor:'pointer', background: isPresent ? '#7c4dff' : '#d1d5db', position:'relative', transition:'background 0.2s' }}>
+                            <div onClick={canToggle ? function(){ setAttendanceData(function(p){ var n = Object.assign({}, p); n[s.id] = !n[s.id]; return n; }); } : undefined}
+                              style={{ display:'inline-flex', width:42, height:23, borderRadius:12, cursor: canToggle ? 'pointer' : 'not-allowed', background: isPresent ? '#7c4dff' : '#d1d5db', position:'relative', transition:'background 0.2s', opacity: canToggle ? 1 : 0.5 }}>
                               <div style={{ position:'absolute', top:2, left: isPresent ? 20 : 2, width:19, height:19, borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
                             </div>
                           </td>
@@ -398,15 +431,17 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
 
                 {/* Footer */}
                 <div style={{ padding:'12px 20px', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12, background:'#f9fafb', borderTop:'1px solid #f1f1f5' }}>
-                  {saveMsg && <span style={{ fontSize:12.5, fontWeight:600, color: saveMsg.includes('xato') ? '#ef4444' : '#16a34a' }}>{saveMsg}</span>}
+                  {saveMsg && <span style={{ fontSize:12.5, fontWeight:600, color: saveMsg.includes('xato') || saveMsg.includes('Xato') ? '#ef4444' : '#16a34a' }}>{saveMsg}</span>}
                   <button onClick={function(){ setSelectedDate(null); setSaveMsg(''); }}
                     style={{ padding:'8px 20px', borderRadius:8, border:'1.5px solid #e5e7eb', background:'white', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>
                     Bekor qilish
                   </button>
-                  <button onClick={handleSave} disabled={saving}
-                    style={{ padding:'8px 24px', borderRadius:8, border:'none', background: saving ? '#9ca3af' : '#7c4dff', color:'white', fontSize:13, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                    {saving ? 'Saqlanmoqda...' : 'Saqlash'}
-                  </button>
+                  {isDateToday(selectedDate) && (
+                    <button onClick={handleSave} disabled={saving}
+                      style={{ padding:'8px 24px', borderRadius:8, border:'none', background: saving ? '#9ca3af' : '#7c4dff', color:'white', fontSize:13, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                      {saving ? 'Saqlanmoqda...' : 'Saqlash'}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -803,17 +838,19 @@ export default function GroupDetail() {
               <button onClick={function(){ setPlayingVideo(null); }}
                 style={{ background:'none', border:'none', cursor:'pointer', color:'white', fontSize:22, lineHeight:1 }}>×</button>
             </div>
-            {(playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link) ? (
-              <video
-                src={playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link}
-                controls autoPlay
-                style={{ width:'100%', display:'block', maxHeight:'70vh' }}
-              />
-            ) : (
-              <div style={{ padding:'40px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>
-                Video URL topilmadi. Fayl serverda mavjud bo'lishi kerak.
-              </div>
-            )}
+            {(function() {
+              var rawUrl = playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link || playingVideo.file_path || playingVideo.src;
+              var videoUrl = rawUrl ? getFileUrl(rawUrl) : null;
+              if (videoUrl) {
+                return <video src={videoUrl} controls autoPlay style={{ width:'100%', display:'block', maxHeight:'70vh' }} />;
+              }
+              return (
+                <div style={{ padding:'40px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>
+                  Video URL topilmadi.<br/>
+                  <small style={{ color:'#6b7280', fontSize:11 }}>Mavjud maydonlar: {Object.keys(playingVideo).join(', ')}</small>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -861,10 +898,17 @@ export default function GroupDetail() {
               <div style={{ padding:24, display:'flex', gap:20, flexWrap:'wrap' }}>
                 {group.teachers && group.teachers.length > 0 ? group.teachers.map(function(t, i) {
                   var name = t.full_name || t.name || "O'qituvchi";
+                  var photoUrl = getPhotoUrl(t.photo || t.avatar || t.image);
                   return (
                     <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                      <div style={{ width:62, height:62, borderRadius:'50%', overflow:'hidden', border:'2px solid #e5e7eb', marginBottom:8 }}>
-                        <img src={'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=1a1a2e&color=fff&size=128'} alt={name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      <div style={{ width:62, height:62, borderRadius:'50%', overflow:'hidden', border:'2px solid #e5e7eb', marginBottom:8, background:'#ede9ff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        {photoUrl ? (
+                          <img src={photoUrl} alt={name} style={{ width:'100%', height:'100%', objectFit:'cover' }}
+                            onError={function(e){ e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        ) : null}
+                        <span style={{ fontSize:22, fontWeight:700, color:'#7c4dff', display: photoUrl ? 'none' : 'flex' }}>
+                          {name.charAt(0).toUpperCase()}
+                        </span>
                       </div>
                       <span style={{ color:'#10b981', fontWeight:700, fontSize:12, marginBottom:2 }}>Teacher</span>
                       <span style={{ color:'#1a1a2e', fontWeight:700, fontSize:13.5 }}>{name}</span>

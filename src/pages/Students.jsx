@@ -17,11 +17,25 @@ const BADGE_COLORS = [
   { bg: '#e8f5e9', text: '#2e7d32' },
 ];
 
-const Avatar = ({ name }) => (
-  <div className="w-8 h-8 rounded-full bg-[#ede9ff] flex items-center justify-center font-bold text-[13px] text-[#7c4dff] shrink-0">
-    {name?.charAt(0)?.toUpperCase() || 'S'}
-  </div>
-);
+const BASE_STATIC = 'https://najot-edu.softwareengineer.uz';
+
+function getPhotoUrl(photo) {
+  if (!photo) return null;
+  if (photo.startsWith('http')) return photo;
+  if (photo.startsWith('/')) return BASE_STATIC + photo;
+  return BASE_STATIC + '/' + photo;
+}
+
+const Avatar = ({ name, photo }) => {
+  const url = getPhotoUrl(photo);
+  return (
+    <div className="w-8 h-8 rounded-full bg-[#ede9ff] flex items-center justify-center font-bold text-[13px] text-[#7c4dff] shrink-0 overflow-hidden">
+      {url
+        ? <img src={url} alt={name} className="w-full h-full object-cover" onError={function(e){ e.target.style.display='none'; }} />
+        : (name?.charAt(0)?.toUpperCase() || 'S')}
+    </div>
+  );
+};
 
 const LIMIT = 5;
 
@@ -132,6 +146,7 @@ const Students = () => {
           const mapped = list.map((s, i) => ({
             id: s.id || s._id || i + 1,
             name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.name || s.fullName || s.full_name || '',
+            photo: s.photo || s.avatar || s.image || null,
             guruhlar: s.groups ? s.groups.map(g => typeof g === 'object' ? (g.name || '') : g) : (s.group ? [s.group] : []),
             guruhIds: s.groups ? s.groups.map(g => typeof g === 'object' ? (g.id || g._id) : g) : [],
             phone: s.phone || '',
@@ -680,7 +695,7 @@ const Students = () => {
                   {/* Nomi */}
                   <td className="p-[10px_10px]">
                     <div className="flex items-center gap-2">
-                      <Avatar name={s.name} />
+                      <Avatar name={s.name} photo={s.photo} />
                       <span className="font-semibold text-[#1a1a2e] text-[13px]">{s.name}</span>
                     </div>
                   </td>
