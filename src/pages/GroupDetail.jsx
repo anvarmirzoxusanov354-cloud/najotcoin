@@ -356,6 +356,175 @@ function ScheduleTable({ schedules, teacherName, group, students }) {
   );
 }
 
+// ─── Video Upload Modal ───────────────────────────────────────────────────────
+function VideoUploadModal({ groupId, groupLessons, setGroupLessons, onClose, onUploaded }) {
+  var [files, setFiles] = React.useState([]); // [{file, lessonId, videoName}]
+  var [lessons, setLessons] = React.useState(groupLessons || []);
+  var [uploading, setUploading] = React.useState(false);
+  var [dragActive, setDragActive] = React.useState(false);
+  var fileInputRef = React.useRef(null);
+
+  // Darslarni yuklash: GET /api/v1/lessons/my/group/{groupId}
+  React.useEffect(function() {
+    if (lessons.length > 0) return;
+    var token = localStorage.getItem('accessToken');
+    fetch(BASE + '/lessons/my/group/' + groupId, { headers: { Authorization: 'Bearer ' + token } })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) return;
+        var list = Array.isArray(data) ? data : (data.data || data.lessons || data.items || []);
+        setLessons(list);
+        setGroupLessons(list);
+      }).catch(function() {});
+  }, [groupId]);
+
+  function addFiles(newFiles) {
+    var arr = Array.from(newFiles);
+    setFiles(function(prev) {
+      var added = arr.map(function(f) { return { file: f, lessonId: '', videoName: f.name }; });
+      return prev.concat(added);
+    });
+  }
+
+  function handleDrop(e) {
+    e.preventDefault(); setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+  }
+
+  function updateFile(idx, field, val) {
+    setFiles(function(prev) {
+      var next = prev.slice();
+      next[idx] = Object.assign({}, next[idx], { [field]: val });
+      return next;
+    });
+  }
+
+  function removeFile(idx) {
+    setFiles(function(prev) { return prev.filter(function(_, i) { return i !== idx; }); });
+  }
+
+  async function handleUpload() {
+    if (files.length === 0) return;
+    setUploading(true);
+    var token = localStorage.getItem('accessToken');
+    var headers = { Authorization: 'Bearer ' + token };
+    var errors = [];
+
+    for (var i = 0; i < files.length; i++) {
+      var item = files[i];
+      if (!item.lessonId) { errors.push(item.file.name + ': Dars tanlanmagan'); continue; }
+      var fd = new FormData();
+      fd.append('file', item.file);
+      try {
+        var r = await fetch(BASE + '/files/group/' + groupId + '/upload?lessonId=' + item.lessonId, {
+          method: 'POST', headers: headers, body: fd,
+        });
+        if (!r.ok) {
+          var t = await r.text();
+          errors.push(item.file.name + ': xatolik ' + r.status + ' - ' + t);
+        }
+      } catch(e) {
+        errors.push(item.file.name + ': ' + e.message);
+      }
+    }
+
+    setUploading(false);
+    if (errors.length > 0) {
+      alert('Xatoliklar:\n' + errors.join('\n'));
+    } else {
+      onUploaded();
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }} />
+      <div style={{ position:'relative', background:'white', borderRadius:16, boxShadow:'0 10px 40px rgba(0,0,0,0.18)', width:'100%', maxWidth:660, zIndex:1, overflow:'hidden', display:'flex', flexDirection:'column', maxHeight:'90vh' }}>
+        {/* Header */}
+        <div style={{ padding:'22px 24px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #f1f1f5' }}>
+          <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:'#1a1a2e' }}>Qo'shish</h2>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#9ca3af', fontSize:24, lineHeight:1 }}>×</button>
+        </div>
+
+        <div style={{ padding:'20px 24px', overflowY:'auto', flex:1 }}>
+          {/* Drop zone */}
+          <label style={{ display:'block', cursor:'pointer' }}>
+            <div
+              onDragEnter={function(e){ e.preventDefault(); setDragActive(true); }}
+              onDragLeave={function(e){ e.preventDefault(); setDragActive(false); }}
+              onDragOver={function(e){ e.preventDefault(); }}
+              onDrop={handleDrop}
+              style={{ border:'2px dashed ' + (dragActive ? '#10b981' : '#c3dafe'), borderRadius:12, padding:'32px 20px', textAlign:'center', background: dragActive ? '#f0fdf4' : '#f0f9ff', marginBottom: files.length > 0 ? 20 : 0 }}
+            >
+              <div style={{ width:44, height:44, border:'2px solid #10b981', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px', fontSize:22, color:'#10b981' }}>+</div>
+              <p style={{ margin:'0 0 4px', fontSize:14, fontWeight:600, color:'#1a1a2e' }}>Videofaylni yuklash uchun ushbu hudud ustiga bosing yoki faylni shu yerga olib keling</p>
+              <p style={{ margin:0, fontSize:12, color:'#6b7280' }}>Videofayl .mp4, .webm, .mpeg, .avi, .mkv, .m4v, .ogm, .mov formatlaridan birida bo'lishi kerak</p>
+            </div>
+            <input ref={fileInputRef} type="file" accept="video/*,.mp4,.webm,.mpeg,.avi,.mkv,.m4v,.ogm,.mov" multiple style={{ display:'none' }}
+              onChange={function(e){ if(e.target.files && e.target.files.length > 0) addFiles(e.target.files); e.target.value = ''; }} />
+          </label>
+
+          {/* Tanlangan fayllar jadvali */}
+          {files.length > 0 && (
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid #f1f1f5' }}>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>File name</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:'#ef4444', fontSize:12 }}>* Dars</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:'#ef4444', fontSize:12 }}>* Video nomi</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map(function(item, idx) {
+                  return (
+                    <tr key={idx} style={{ borderBottom:'1px solid #f5f5f7' }}>
+                      <td style={{ padding:'10px 12px', color:'#374151', fontWeight:500, maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.file.name}</td>
+                      <td style={{ padding:'10px 12px' }}>
+                        <select value={item.lessonId}
+                          onChange={function(e){ updateFile(idx, 'lessonId', e.target.value); }}
+                          style={{ padding:'6px 10px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', background:'white', minWidth:140 }}>
+                          <option value="">Darsni tanlang</option>
+                          {lessons.map(function(l) {
+                            return <option key={l.id} value={l.id}>{l.topic || l.title || l.name || ('Dars ' + l.id)}</option>;
+                          })}
+                        </select>
+                      </td>
+                      <td style={{ padding:'10px 12px' }}>
+                        <input type="text" value={item.videoName}
+                          onChange={function(e){ updateFile(idx, 'videoName', e.target.value); }}
+                          style={{ padding:'6px 10px', borderRadius:8, border:'1.5px solid #e5e7eb', fontSize:12.5, outline:'none', width:'100%', boxSizing:'border-box', minWidth:120 }} />
+                      </td>
+                      <td style={{ padding:'10px 12px' }}>
+                        <button onClick={function(){ removeFile(idx); }}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'#ef4444', display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:6, background:'#fff5f5' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12, borderTop:'1px solid #f1f1f5', background:'white' }}>
+          <button onClick={onClose}
+            style={{ padding:'9px 20px', borderRadius:8, border:'none', background:'none', fontSize:13, fontWeight:600, color:'#374151', cursor:'pointer' }}>
+            Bekor qilish
+          </button>
+          <button onClick={handleUpload} disabled={uploading || files.length === 0 || files.some(function(f){ return !f.lessonId; })}
+            style={{ padding:'9px 24px', borderRadius:8, border:'none', fontSize:13, fontWeight:600, cursor: (!uploading && files.length > 0 && !files.some(function(f){ return !f.lessonId; })) ? 'pointer' : 'not-allowed', background: (!uploading && files.length > 0 && !files.some(function(f){ return !f.lessonId; })) ? '#7c4dff' : '#d1d5db', color: (!uploading && files.length > 0 && !files.some(function(f){ return !f.lessonId; })) ? 'white' : '#9ca3af', transition:'all 0.15s' }}>
+            {uploading ? 'Yuklanmoqda...' : 'Fayllarni yuklash'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 var TABS = ["Ma'lumotlar", 'Guruh darsliklari', 'Akademik davomati'];
 
 export default function GroupDetail() {
@@ -374,6 +543,10 @@ export default function GroupDetail() {
   var [videos, setVideos] = useState([]);
   var [videosLoading, setVideosLoading] = useState(false);
   var [videoUploadOpen, setVideoUploadOpen] = useState(false);
+  var [videoFiles, setVideoFiles] = useState([]); // [{file, lessonId, videoName}]
+  var [groupLessons, setGroupLessons] = useState([]);
+  var [videoUploading, setVideoUploading] = useState(false);
+  var [playingVideo, setPlayingVideo] = useState(null); // video player modal
   var [exams, setExams] = useState([]);
   var [examsLoading, setExamsLoading] = useState(false);
 
@@ -527,6 +700,32 @@ export default function GroupDetail() {
 
   return (
     <div style={{ minHeight:'100%', background:'#f1f5f9' }}>
+      {/* Video Player Modal */}
+      {playingVideo && (
+        <div style={{ position:'fixed', inset:0, zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={function(){ setPlayingVideo(null); }} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.8)' }} />
+          <div style={{ position:'relative', background:'#000', borderRadius:12, overflow:'hidden', width:'100%', maxWidth:800, zIndex:1 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'rgba(255,255,255,0.05)' }}>
+              <span style={{ color:'white', fontWeight:600, fontSize:14 }}>
+                {playingVideo.title || playingVideo.name || playingVideo.filename || playingVideo.original_name || playingVideo.file_name || 'Video'}
+              </span>
+              <button onClick={function(){ setPlayingVideo(null); }}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'white', fontSize:22, lineHeight:1 }}>×</button>
+            </div>
+            {(playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link) ? (
+              <video
+                src={playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link}
+                controls autoPlay
+                style={{ width:'100%', display:'block', maxHeight:'70vh' }}
+              />
+            ) : (
+              <div style={{ padding:'40px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>
+                Video URL topilmadi. Fayl serverda mavjud bo'lishi kerak.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -694,99 +893,21 @@ export default function GroupDetail() {
           {activeSubTab === 'Videolar' && (
             <div>
               {videoUploadOpen && (
-                <div style={{ position:'fixed', inset:0, zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-                  <div onClick={function(){ setVideoUploadOpen(false); }} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }} />
-                  <div style={{ position:'relative', background:'white', borderRadius:16, boxShadow:'0 10px 40px rgba(0,0,0,0.18)', width:'100%', maxWidth:520, overflow:'hidden', zIndex:1 }}>
-                    <div style={{ padding:'24px 24px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                      <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:'#1a1a2e' }}>Qo'shish</h2>
-                      <button onClick={function(){ setVideoUploadOpen(false); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#9ca3af', fontSize:22, lineHeight:1 }}>×</button>
-                    </div>
-                    <div style={{ padding:'0 24px 24px' }}>
-                      {/* Lesson topic input */}
-                      <div style={{ marginBottom:12 }}>
-                        <label style={{ display:'block', fontSize:13, fontWeight:600, color:'#374151', marginBottom:6 }}>Dars mavzusi (majburiy)</label>
-                        <input
-                          id="video-lesson-topic"
-                          type="text"
-                          placeholder="Masalan: Node.js, HTML, CSS..."
-                          style={{ width:'100%', padding:'10px 14px', borderRadius:10, border:'1.5px solid #e5e7eb', fontSize:13, outline:'none', boxSizing:'border-box' }}
-                          onFocus={function(e){ e.target.style.borderColor='#7c4dff'; }}
-                          onBlur={function(e){ e.target.style.borderColor='#e5e7eb'; }}
-                        />
-                      </div>
-                      <label style={{ display:'block', cursor:'pointer' }}>
-                        <div style={{ border:'2px dashed #10b981', borderRadius:12, padding:'36px 20px', textAlign:'center', background:'#f0fdf4' }}>
-                          <div style={{ width:44, height:44, border:'2px solid #10b981', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px', fontSize:22, color:'#10b981' }}>+</div>
-                          <p style={{ margin:'0 0 6px', fontSize:14, fontWeight:600, color:'#1a1a2e' }}>Videofaylni yuklash uchun ushbu hudud ustiga bosing yoki faylni shu yerga olib keling</p>
-                          <p style={{ margin:0, fontSize:12, color:'#6b7280' }}>Videofayl .mp4, .webm, .mpeg, .avi, .mkv, .m4v, .ogm, .mov formatlaridan birida bo'lishi kerak</p>
-                        </div>
-                        <input type="file" accept="video/*,.mp4,.webm,.mpeg,.avi,.mkv,.m4v,.ogm,.mov" style={{ display:'none' }} onChange={function(e) {
-                          var file = e.target.files && e.target.files[0]; if (!file) return;
-                          var topicInput = document.getElementById('video-lesson-topic');
-                          var topic = topicInput ? topicInput.value.trim() : '';
-                          if (!topic) { alert("Iltimos, dars mavzusini kiriting!"); return; }
-                          var token = localStorage.getItem('accessToken');
-                          var headers2 = { Authorization: 'Bearer ' + token };
-
-                          // 1. Lesson yaratish: POST /api/v1/groups/{groupId}/lesson
-                          fetch(BASE + '/groups/' + id + '/lesson', {
-                            method: 'POST',
-                            headers: { ...headers2, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ group_id: Number(id), topic: topic, description: topic }),
-                          })
-                          .then(function(r) {
-                            if (!r.ok) throw new Error('Lesson yaratishda xatolik: ' + r.status);
-                            return r.json();
-                          })
-                          .then(function(lessonData) {
-                            // Barcha nested formatlarni tekshiramiz
-                            var lessonId = null;
-                            if (lessonData) {
-                              var str = JSON.stringify(lessonData);
-                              var match = str.match(/"id"\s*:\s*(\d+)/);
-                              if (match) lessonId = parseInt(match[1]);
-                            }
-                            if (!lessonId) { alert("Lesson ID topilmadi! Server javobi: " + JSON.stringify(lessonData)); return; }
-
-                            // 2. Fayl yuklash: POST /api/v1/files/group/{grupId}/upload?lessonId=X
-                            // Swagger: "grupId" (typo bilan) — shunaqa endpoint
-                            var fd = new FormData();
-                            fd.append('file', file);
-                            return fetch(BASE + '/files/group/' + id + '/upload?lessonId=' + lessonId, {
-                              method: 'POST',
-                              headers: headers2,
-                              body: fd,
-                            })
-                            .then(function(r) {
-                              if (!r.ok) return r.text().then(function(t) { throw new Error('Fayl yuklashda xatolik ' + r.status + ': ' + t); });
-                              return r.json();
-                            })
-                            .then(function(data) {
-                              if (data) {
-                                var fileObj = data.data || data;
-                                setVideos(function(p) { return [fileObj, ...p]; });
-                              }
-                              // Ro'yxatni qayta yuklaymiz
-                              fetch(BASE + '/files/' + id, { headers: headers2 })
-                                .then(function(r) { return r.ok ? r.json() : null; })
-                                .then(function(d) {
-                                  if (d) setVideos(Array.isArray(d) ? d : (d.data || d.files || d.items || []));
-                                }).catch(function(){});
-                              setVideoUploadOpen(false);
-                            });
-                          })
-                          .catch(function(err) {
-                            alert('Xatolik: ' + err.message);
-                            setVideoUploadOpen(false);
-                          });
-                        }} />
-                      </label>
-                      <div style={{ marginTop:14, textAlign:'right' }}>
-                        <button onClick={function(){ setVideoUploadOpen(false); }} style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:600, color:'#374151' }}>Bekor qilish</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <VideoUploadModal
+                  groupId={id}
+                  groupLessons={groupLessons}
+                  setGroupLessons={setGroupLessons}
+                  onClose={function(){ setVideoUploadOpen(false); setVideoFiles([]); }}
+                  onUploaded={function(){
+                    var token = localStorage.getItem('accessToken');
+                    fetch(BASE + '/files/' + id, { headers: { Authorization: 'Bearer ' + token } })
+                      .then(function(r){ return r.ok ? r.json() : null; })
+                      .then(function(d){ if(d) setVideos(Array.isArray(d) ? d : (d.data || d.files || d.items || [])); })
+                      .catch(function(){});
+                    setVideoUploadOpen(false);
+                    setVideoFiles([]);
+                  }}
+                />
               )}
               <div style={{ background:'white', borderRadius:12, boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -803,6 +924,7 @@ export default function GroupDetail() {
                     ) : videos.length > 0 ? videos.map(function(v, idx) {
                       var isReady = !v.status || v.status==='ready' || v.status==='completed';
                       var size = v.size ? (v.size>1048576 ? (v.size/1048576).toFixed(2)+' MB' : (v.size/1024).toFixed(0)+' KB') : '—';
+                      var videoUrl = v.url || v.file_url || v.path || v.link || null;
                       return (
                         <tr key={v.id||idx} style={{ borderBottom:'1px solid #f5f5f7' }}
                           onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
@@ -810,10 +932,12 @@ export default function GroupDetail() {
                           <td style={{ padding:'14px 20px', color:'#9ca3af', fontWeight:500 }}>{idx+1}</td>
                           <td style={{ padding:'14px 16px' }}>
                             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                              <div style={{ width:28,height:28,borderRadius:'50%',background:'#ede9ff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                                <span style={{ fontSize:12, color:'#7c4dff' }}>▶</span>
+                              <div
+                                onClick={videoUrl ? function(){ setPlayingVideo(v); } : undefined}
+                                style={{ width:32,height:32,borderRadius:'50%',background: videoUrl ? '#7c4dff' : '#ede9ff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0, cursor: videoUrl ? 'pointer' : 'default' }}>
+                                <span style={{ fontSize:12, color: videoUrl ? 'white' : '#7c4dff' }}>▶</span>
                               </div>
-                              <span style={{ color:'#1a1a2e', fontWeight:600 }}>{v.title||v.name||v.filename||v.original_name||'Nomsiz'}</span>
+                              <span style={{ color:'#1a1a2e', fontWeight:600 }}>{v.title||v.name||v.filename||v.original_name||v.file_name||'Nomsiz'}</span>
                             </div>
                           </td>
                           <td style={{ padding:'14px 16px', color:'#4b5563', fontWeight:500 }}>{v.lesson?(v.lesson.title||v.lesson.name||v.lesson.topic||''):(v.lesson_name||v.topic||'—')}</td>
