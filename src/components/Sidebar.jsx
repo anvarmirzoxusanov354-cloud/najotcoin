@@ -13,12 +13,12 @@ import {
 } from '@mui/icons-material';
 
 const NAV_ITEMS = [
-  { path: '/',           icon: HomeOutlined,        label: 'Asosiy',        exact: true  },
-  { path: '/teachers',   icon: PeopleAltOutlined,   label: "O'qituvchilar", exact: false },
-  { path: '/classes',    icon: SchoolOutlined,       label: 'Guruhlar',      exact: false },
-  { path: '/students',   icon: GroupOutlined,        label: 'Talabalar',     exact: false },
-  { path: '/gifts',      icon: CardGiftcardOutlined, label: "Sovg'alar",    exact: false },
-  { path: '/management', icon: SettingsOutlined,     label: 'Boshqarish',   exact: false },
+  { path: '/',           icon: HomeOutlined,        key: 'home',         exact: true  },
+  { path: '/teachers',   icon: PeopleAltOutlined,   key: 'teachers',     exact: false },
+  { path: '/classes',    icon: SchoolOutlined,       key: 'classes',      exact: false },
+  { path: '/students',   icon: GroupOutlined,        key: 'students',     exact: false },
+  { path: '/gifts',      icon: CardGiftcardOutlined, key: 'gifts',        exact: false },
+  { path: '/management', icon: SettingsOutlined,     key: 'management',   exact: false },
 ];
 
 const Sidebar = ({ onClose, isCollapsed }) => {
@@ -47,8 +47,9 @@ const Sidebar = ({ onClose, isCollapsed }) => {
 
       {/* Nav links */}
       <nav className="space-y-1 flex-1">
-        {NAV_ITEMS.map(({ path, icon: Icon, label, exact }) => {
+        {NAV_ITEMS.map(({ path, icon: Icon, key, exact }) => {
           const active = isActive(path, exact);
+          const label  = t(key);
           return (
             <Link
               key={path}
@@ -84,15 +85,15 @@ const Sidebar = ({ onClose, isCollapsed }) => {
                 <DescriptionOutlined className="text-orange-400" fontSize="small" />
               </div>
               <div>
-                <p className="text-xs font-bold">Obuna</p>
-                <p className="text-[10px] text-red-500">Obunangiz tugagan</p>
+                <p className="text-xs font-bold">{t('subscription')}</p>
+                <p className="text-[10px] text-red-500">{t('subscriptionExpired')}</p>
               </div>
             </div>
             <button
               onClick={() => navigate('/subscription')}
               className="w-full bg-[#ff3d00] text-white py-2 rounded-xl text-xs font-bold hover:bg-opacity-90 cursor-pointer"
             >
-              ⚡ Obunani yangilash
+              ⚡ {t('renewSubscription')}
             </button>
           </div>
         </div>
