@@ -179,12 +179,13 @@ const Teachers = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch { /* ignore */ }
-    // Local listdan ham olib tashlaymiz
-    setTeachers(prev => prev.filter(t => t.id !== id));
-    // Arxiv listiga qo'shamiz
-    setArchivedTeachers(prev => {
-      const found = teachers.find(t => t.id === id);
-      return found ? [...prev, { ...found, archived: true }] : prev;
+    // Arxiv listiga qo'shamiz (functional update bilan stale closure muammosi yo'q)
+    setTeachers(prev => {
+      const found = prev.find(t => t.id === id);
+      if (found) {
+        setArchivedTeachers(arch => [...arch, { ...found, archived: true }]);
+      }
+      return prev.filter(t => t.id !== id);
     });
   };
 
@@ -235,7 +236,9 @@ const Teachers = () => {
     setArchivedLoading(false);
   };
 
-  const archiveOne = (id) => deleteOne(id); // alias
+  const archiveOne = async (id) => {
+    await deleteOne(id);
+  };
 
   const exportCSV = (list) => {
     const header = ['Ismi', 'Guruh', 'Telefon', "Tug'ilgan sana", 'Yaratilgan sana'];
