@@ -17,8 +17,13 @@ function fmtDate(str) {
 // body: { grade, title, homework_answer_id }
 
 const ExamSubmission = () => {
+  // Ikkala route ham qo'llab-quvvatlanadi:
+  // /classes/:id/exam/:examId/submission/:submissionId  (eski)
+  // /classes/:id/homework/:examId/result/:submissionId  (yangi)
   const { id: groupId, examId: homeworkId, submissionId: studentId } = useParams();
   const navigate = useNavigate();
+  const location = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isHomeworkRoute = location.includes('/homework/');
 
   const [homework, setHomework] = useState(null);
   const [result, setResult] = useState(null);
@@ -87,7 +92,12 @@ const ExamSubmission = () => {
       });
 
       if (res.ok) {
-        navigate(`/classes/${groupId}/exam/${homeworkId}`);
+        // Qaysi routedan kelganiga qarab qaytamiz
+        if (window.location.pathname.includes('/homework/')) {
+          navigate(`/classes/${groupId}/homework/${homeworkId}`);
+        } else {
+          navigate(`/classes/${groupId}/exam/${homeworkId}`);
+        }
       } else {
         try {
           const err = await res.json();
@@ -136,7 +146,13 @@ const ExamSubmission = () => {
     <div className="min-h-full bg-[#f1f5f9]">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-5 text-[13px]">
-        <button onClick={() => navigate(`/classes/${groupId}/exam/${homeworkId}`)}
+        <button onClick={() => {
+            if (window.location.pathname.includes('/homework/')) {
+              navigate(`/classes/${groupId}/homework/${homeworkId}`);
+            } else {
+              navigate(`/classes/${groupId}/exam/${homeworkId}`);
+            }
+          }}
           className="text-[#3b7cf7] font-semibold bg-transparent border-none cursor-pointer hover:underline p-0">
           Kutayotganlar
         </button>

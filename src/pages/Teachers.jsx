@@ -171,6 +171,7 @@ const Teachers = () => {
   };
 
   const deleteOne = async (id) => {
+    // DELETE → server arxivga o'tkazadi
     const token = localStorage.getItem('accessToken');
     try {
       await fetch(`https://najot-edu.softwareengineer.uz/api/v1/teachers/${id}`, {
@@ -178,11 +179,63 @@ const Teachers = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch { /* ignore */ }
+    // Local listdan ham olib tashlaymiz
     setTeachers(prev => prev.filter(t => t.id !== id));
+    // Arxiv listiga qo'shamiz
+    setArchivedTeachers(prev => {
+      const found = teachers.find(t => t.id === id);
+      return found ? [...prev, { ...found, archived: true }] : prev;
+    });
   };
 
-  const archiveOne = (id) =>
-    setTeachers(prev => prev.map(t => t.id === id ? { ...t, archived: !t.archived } : t));
+  // Arxivdan qaytarish — PATCH /api/v1/teachers/{id}
+  const restoreOne = async (id) => {
+    const token = localStorage.getItem('accessToken');
+    const fd = new FormData();
+    fd.append('is_active', 'true');
+    try {
+      const res = await fetch(`https://najot-edu.softwareengineer.uz/api/v1/teachers/${id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (res.ok) {
+        const found = archivedTeachers.find(t => t.id === id);
+        if (found) setTeachers(prev => [{ ...found, archived: false }, ...prev]);
+        setArchivedTeachers(prev => prev.filter(t => t.id !== id));
+      }
+    } catch { /* ignore */ }
+  };
+
+  // Arxivni yuklaymiz — GET /api/v1/teachers/archive
+  const loadArchived = async () => {
+    if (archivedLoading || archivedTeachers.length > 0) return;
+    setArchivedLoading(true);
+    const token = localStorage.getItem('accessToken');
+    try {
+      const res = await fetch('https://najot-edu.softwareengineer.uz/api/v1/teachers/archive', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        let list = Array.isArray(data) ? data : (data.data || data.teachers || []);
+        setArchivedTeachers(list.map((u, i) => ({
+          id: u.id || i,
+          name: u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.name || '',
+          avatar: u.photo || u.avatar || null,
+          guruh: u.groups?.[0]?.name || '',
+          phone: u.phone || '',
+          born: u.birth_date || '',
+          created: u.createdAt || u.created_at ? new Date(u.createdAt || u.created_at).toLocaleDateString('ru-RU') : '',
+          labels: u.groups ? u.groups.map(g => typeof g === 'object' ? (g.name || '') : g) : [],
+          archived: true,
+        })));
+      }
+    } catch { /* ignore */ }
+    setArchivedLoading(false);
+  };
+
+  const archiveOne = (id) => deleteOne(id); // alias
 
   const exportCSV = (list) => {
     const header = ['Ismi', 'Guruh', 'Telefon', "Tug'ilgan sana", 'Yaratilgan sana'];
@@ -588,7 +641,7 @@ const Teachers = () => {
             <input placeholder="Search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               className="w-full p-[8px_14px_8px_34px] rounded-[8px] border-[1.5px] border-[#e5e7eb] text-[13px] outline-none bg-white focus:border-[#7c4dff]" />
           </div>
-          <button onClick={() => { setShowArchived(a => !a); setPage(1); }}
+          <button onClick={() => { setShowArchived(a => !a); setPage(1); if (!showArchived) loadArchived(); }}
             className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 p-[8px_14px] border-[1.5px] rounded-[8px] text-[13px] cursor-pointer whitespace-nowrap ${showArchived ? 'border-[#7c4dff] bg-[#f0ebff] text-[#7c4dff]' : 'border-[#e5e7eb] bg-white text-[#374151]'}`}>
             <ArchiveOutlined fontSize="small" /> {showArchived ? 'Faollar' : 'Arxiv'}
           </button>
@@ -673,6 +726,61 @@ const Teachers = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Arxiv jadvali */}
+      {showArchived && (
+        <div className="bg-white rounded-[16px] shadow-[0_1px_8px_rgba(0,0,0,0.06)] overflow-x-auto mt-4">
+          <div className="flex items-center gap-2 p-[14px_18px] border-b border-[#f1f1f5]">
+            <ArchiveOutlined fontSize="small" className="text-[#7c4dff]" />
+            <span className="font-semibold text-[14px] text-[#1a1a2e]">Arxivdagi o'qituvchilar</span>
+            <span className="bg-[#ede9ff] text-[#7c4dff] text-[12px] font-bold px-2 py-0.5 rounded-[6px]">{archivedTeachers.length}</span>
+          </div>
+          {archivedLoading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-[#9ca3af] text-[13px]">
+              <svg className="animate-spin h-4 w-4 text-[#7c4dff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Yuklanmoqda...
+            </div>
+          ) : archivedTeachers.length === 0 ? (
+            <div className="py-10 text-center text-[#9ca3af] text-[13px]">Arxiv bo'sh</div>
+          ) : (
+            <table className="w-full border-collapse text-[13px] min-w-[700px]">
+              <thead>
+                <tr className="border-b border-[#f1f1f5]">
+                  <th className="p-[12px_14px] text-left font-semibold text-[#374151] text-[12.5px]">Ismi</th>
+                  <th className="p-[12px_10px] text-left font-semibold text-[#374151] text-[12.5px]">Telefon</th>
+                  <th className="p-[12px_10px] text-left font-semibold text-[#374151] text-[12.5px]">Guruh</th>
+                  <th className="p-[12px_10px] text-left font-semibold text-[#374151] text-[12.5px]">Yaratilgan</th>
+                  <th className="p-[12px_10px] w-24"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivedTeachers.map((t, i) => (
+                  <tr key={t.id || i} className={`border-b border-[#f9f9fb] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'} hover:bg-[#f5f0ff]`}>
+                    <td className="p-[10px_14px]">
+                      <div className="flex items-center gap-2">
+                        <Avatar name={t.name} photo={t.avatar} />
+                        <span className="font-semibold text-[#1a1a2e] text-[13px]">{t.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-2.5 text-[#374151]">{t.phone}</td>
+                    <td className="p-2.5 text-[#6b7280]">{t.guruh || '—'}</td>
+                    <td className="p-2.5 text-[#6b7280]">{t.created}</td>
+                    <td className="p-2.5 text-right">
+                      <button onClick={() => restoreOne(t.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 border-none rounded-[8px] bg-[#dcfce7] text-[#16a34a] text-[12px] font-semibold cursor-pointer hover:bg-[#bbf7d0] transition-colors">
+                        <RefreshOutlined style={{ fontSize: 14 }} /> Tiklash
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Pagination */}
       <div className="flex justify-between items-center mt-4">
