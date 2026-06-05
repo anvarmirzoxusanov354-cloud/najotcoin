@@ -36,16 +36,18 @@ export default function HomeworkDetail() {
 
   const [homework, setHomework] = useState(null);
   const [activeTab, setActiveTab] = useState('PENDING');
-  const [results, setResults] = useState({});     // { PENDING: [], REJECTED: [], ... }
-  const [counts, setCounts] = useState({});       // { PENDING: 0, ... }
+  const [results, setResults] = useState({});
+  const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
 
+  // token va headers ni render daqidagi qiymat sifatida olamiz
   const token = localStorage.getItem('accessToken');
-  const headers = { Authorization: `Bearer ${token}` };
 
   // Homework ma'lumotlarini olish
   useEffect(() => {
-    fetch(`${BASE}/homework/${groupId}`, { headers })
+    if (!token) return;
+    const h = { Authorization: `Bearer ${token}` };
+    fetch(`${BASE}/homework/${groupId}`, { headers: h })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         const list = Array.isArray(data) ? data : (data?.data || data?.homeworks || []);
@@ -57,10 +59,12 @@ export default function HomeworkDetail() {
 
   // Har tab uchun natijalarni yuklaymiz
   useEffect(() => {
+    if (!token) { setLoading(false); return; }
+    const h = { Authorization: `Bearer ${token}` };
     setLoading(true);
     Promise.all(
       STATUS_TABS.map(tab =>
-        fetch(`${BASE}/group/${groupId}/homework/${homeworkId}/results?status=${tab.key}`, { headers })
+        fetch(`${BASE}/group/${groupId}/homework/${homeworkId}/results?status=${tab.key}`, { headers: h })
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             const list = Array.isArray(data) ? data : (data?.data || data?.results || data?.items || []);
