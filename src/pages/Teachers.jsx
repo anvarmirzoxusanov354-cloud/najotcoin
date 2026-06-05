@@ -60,6 +60,8 @@ const Teachers = () => {
   const [showFilter, setShowFilter] = useState(false);
   const [filterGuruh, setFilterGuruh] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [archivedTeachers, setArchivedTeachers] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   // Fetch teachers from API — GET /api/v1/teachers

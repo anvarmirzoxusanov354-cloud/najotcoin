@@ -1002,11 +1002,15 @@ export default function GroupDetail() {
                     <tr><td colSpan={9} style={{ padding:40, textAlign:'center', color:'#9ca3af' }}>Yuklanmoqda...</td></tr>
                   ) : homeworks.length > 0 ? homeworks.map(function(hw, idx) {
                     return (
-                      <tr key={hw.id || idx} style={{ borderBottom:'1px solid #f5f5f7' }}
+                      <tr key={hw.id || idx} style={{ borderBottom:'1px solid #f5f5f7', cursor:'pointer' }}
+                        onClick={function(){ navigate('/classes/'+id+'/homework/'+hw.id); }}
                         onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
                         onMouseLeave={function(e){ e.currentTarget.style.background='white'; }}>
                         <td style={{ padding:'16px 20px', color:'#6b7280', fontWeight:500 }}>{idx+1}</td>
-                        <td style={{ padding:'16px 16px', color:'#1a1a2e', fontWeight:600 }}>{hw.title||hw.name||hw.topic||'Nomsiz'}</td>
+                        <td style={{ padding:'16px 16px', color:'#3b7cf7', fontWeight:600, cursor:'pointer' }}
+                          onClick={function(e){ e.stopPropagation(); navigate('/classes/'+id+'/homework/'+hw.id); }}>
+                          {hw.title||hw.name||hw.topic||'Nomsiz'}
+                        </td>
                         <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.students_count||0}</td>
                         <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.pending_count||0}</td>
                         <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.checked_count||0}</td>

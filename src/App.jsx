@@ -16,6 +16,7 @@ import CreateHomework from './pages/CreateHomework';
 import CreateExam from './pages/CreateExam';
 import ExamDetail from './pages/ExamDetail';
 import ExamSubmission from './pages/ExamSubmission';
+import HomeworkDetail from './pages/HomeworkDetail';
 import Students from './pages/Students';
 import Gifts from './pages/Gifts';
 import Management from './pages/Management';
@@ -40,6 +41,7 @@ function App() {
                   <Route path=":id" element={<GroupDetail />} />
                   <Route path=":id/add-students" element={<AddStudentsToGroup />} />
                   <Route path=":id/homework/create" element={<CreateHomework />} />
+                  <Route path=":id/homework/:homeworkId" element={<HomeworkDetail />} />
                   <Route path=":id/exam/create" element={<CreateExam />} />
                   <Route path=":id/exam/:examId" element={<ExamDetail />} />
                   <Route path=":id/exam/:examId/submission/:submissionId" element={<ExamSubmission />} />

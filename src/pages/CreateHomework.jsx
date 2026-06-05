@@ -153,7 +153,7 @@ const CreateHomework = () => {
       }
 
       if (!lessonId) {
-        setError("Dars (lesson) topilmadi yoki yaratishda xatolik. Guruhda dars mavjudligini tekshiring.");
+        setError("Dars (lesson) topilmadi. Avval guruh uchun davomat kiritib dars yarating, keyin uyga vazifa bering.");
         setLoading(false);
         return;
       }

@@ -41,6 +41,8 @@ const KurslarContent = () => {
   const [activeFilial, setActiveFilial] = useState(0);
   const [search, setSearch] = useState('');
   const [courses, setCourses] = useState([]);
+  const [archivedCourses, setArchivedCourses] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(true);
