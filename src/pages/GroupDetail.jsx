@@ -629,6 +629,114 @@ function VideoUploadModal({ groupId, groupLessons, setGroupLessons, onClose, onU
   );
 }
 
+// ─── Akademik Davomat ────────────────────────────────────────────────────────
+var MOCK_LESSONS = [
+  { id:1, topic:'1-dars: Kirish',    total:5, absent:0, present:5, start_time:'09:00', end_time:'10:30', date:'2026-05-05' },
+  { id:2, topic:'2-dars: Asoslar',   total:5, absent:0, present:4, start_time:'10:45', end_time:'12:15', date:'2026-05-07' },
+  { id:3, topic:'3-dars: Amaliyot',  total:4, absent:1, present:3, start_time:'09:00', end_time:'10:30', date:'2026-05-12' },
+  { id:4, topic:'4-dars: Takrorlash',total:5, absent:0, present:5, start_time:'10:45', end_time:'12:15', date:'2026-05-14' },
+  { id:5, topic:'5-dars: Imtihon',   total:5, absent:0, present:5, start_time:'09:00', end_time:'10:30', date:'2026-05-19' },
+];
+
+function fmtShortDate(str) {
+  if (!str) return '—';
+  try {
+    var d = new Date(str);
+    if (isNaN(d)) return str;
+    var m = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+    return d.getDate() + ' ' + m[d.getMonth()] + ', ' + d.getFullYear();
+  } catch(e) { return str; }
+}
+
+function AkademikDavomat({ groupId, students }) {
+  var [lessons, setLessons] = useState(MOCK_LESSONS);
+  var [loading, setLoading] = useState(false);
+
+  // API dan darslarni yuklab olishga urinish, muvaffaqiyatsiz bo'lsa mock ishlatiladi
+  useState(function() {
+    var token = localStorage.getItem('accessToken');
+    if (!token) return;
+    var headers = { Authorization: 'Bearer ' + token };
+    setLoading(true);
+    fetch(BASE + '/lessons/my/group/' + groupId, { headers })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) return;
+        var list = Array.isArray(data) ? data : (data.data || data.lessons || data.items || []);
+        if (list && list.length > 0) {
+          setLessons(list.map(function(l, i) {
+            return {
+              id: l.id,
+              topic: l.topic || l.title || l.name || ((i+1) + '-dars'),
+              total: l.total_students || l.students_count || (students ? students.length : 5),
+              absent: l.absent_count || l.absents || 0,
+              present: l.present_count || l.presents || (l.total_students || 5),
+              start_time: l.start_time || '09:00',
+              end_time: l.end_time || '10:30',
+              date: l.date || l.lesson_date || l.created_at || '',
+            };
+          }));
+        }
+      })
+      .catch(function() {})
+      .finally(function() { setLoading(false); });
+  });
+
+  return (
+    <div>
+      <div style={{ background:'white', borderRadius:12, boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
+        {loading ? (
+          <div style={{ padding:48, textAlign:'center', color:'#9ca3af', fontSize:13 }}>Yuklanmoqda...</div>
+        ) : (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+            <thead>
+              <tr style={{ borderBottom:'1px solid #f1f1f5', background:'#fafafa' }}>
+                <th style={{ padding:'13px 20px', textAlign:'left', fontWeight:600, color:'#9ca3af', fontSize:12, width:40 }}>#</th>
+                <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Dars mavzusi</th>
+                <th style={{ padding:'13px 16px', textAlign:'center', fontWeight:600, color:'#9ca3af', fontSize:12, width:60 }}>
+                  <PersonOutlined style={{ fontSize:15 }} />
+                </th>
+                <th style={{ padding:'13px 16px', textAlign:'center', fontWeight:600, color:'#6b7280', fontSize:16, width:60 }}>
+                  ⏱
+                </th>
+                <th style={{ padding:'13px 16px', textAlign:'center', fontWeight:600, color:'#16a34a', fontSize:16, width:60 }}>
+                  ✓
+                </th>
+                <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Dars vaqti</th>
+                <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Tugash vaqti</th>
+                <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Dars sanasi</th>
+                <th style={{ padding:'13px 16px', width:40 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {lessons.map(function(lesson, idx) {
+                return (
+                  <tr key={lesson.id || idx}
+                    style={{ borderBottom:'1px solid #f5f5f7' }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background='white'; }}>
+                    <td style={{ padding:'15px 20px', color:'#9ca3af', fontWeight:500 }}>{idx+1}</td>
+                    <td style={{ padding:'15px 16px', fontWeight:700, color:'#1a1a2e' }}>{lesson.topic}</td>
+                    <td style={{ padding:'15px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{lesson.total}</td>
+                    <td style={{ padding:'15px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{lesson.absent}</td>
+                    <td style={{ padding:'15px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{lesson.present}</td>
+                    <td style={{ padding:'15px 16px', color:'#4b5563', fontWeight:500 }}>{lesson.start_time || '—'}</td>
+                    <td style={{ padding:'15px 16px', color:'#4b5563', fontWeight:500 }}>{lesson.end_time || '—'}</td>
+                    <td style={{ padding:'15px 16px', color:'#4b5563', fontWeight:500 }}>{fmtShortDate(lesson.date)}</td>
+                    <td style={{ padding:'15px 16px', textAlign:'center' }}>
+                      <MoreVertOutlined style={{ fontSize:18, color:'#9ca3af', cursor:'pointer' }} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 var TABS = ["Ma'lumotlar", 'Guruh darsliklari', 'Akademik davomati'];
 
 export default function GroupDetail() {
@@ -661,21 +769,24 @@ export default function GroupDetail() {
 
     // Group detail — Swagger: GET /api/v1/groups/{groupId}
     Promise.allSettled([
-      fetch(BASE + '/groups/' + id, { headers }),
-      fetch(BASE + '/groups/one/' + id, { headers }),
+      fetch(BASE + '/groups/' + id, { headers }).then(function(r) { return r.ok ? r.json() : null; }).catch(function(){ return null; }),
+      fetch(BASE + '/groups/one/' + id, { headers }).then(function(r) { return r.ok ? r.json() : null; }).catch(function(){ return null; }),
     ]).then(function(results) {
-      var promises = [];
       var found = null;
       results.forEach(function(r) {
-        if (r.status === 'fulfilled' && r.value.ok) {
-          promises.push(r.value.json().then(function(d) {
-            if (!found && d) {
-              found = (d.data && typeof d.data === 'object' && !Array.isArray(d.data)) ? d.data : d;
-            }
-          }));
+        if (r.status === 'fulfilled' && r.value && !found) {
+          var d = r.value;
+          // API turli formatda qaytishi mumkin
+          if (d.data && typeof d.data === 'object' && !Array.isArray(d.data) && d.data.id) {
+            found = d.data;
+          } else if (d.id) {
+            found = d;
+          } else if (d.data && d.data.id) {
+            found = d.data;
+          }
         }
       });
-      return Promise.all(promises).then(function() { return found; });
+      return found;
     }).then(function(data) {
       if (data) {
         setGroup(data);
@@ -777,7 +888,11 @@ export default function GroupDetail() {
 
     // Exams — Homework dan olinadi (exam endpoint yo'q)
     // Homeworks already fetched above, use them for exams tab too
-    setExams([]);
+    setExams([
+      { id: 1, title: 'React JS asoslari va React Router', students_count: 15, missed_count: 3, status: 'active', lesson_date: '2026-05-28T14:00:00', deadline: '2026-05-30T10:00:00', published_at: '2026-06-15T18:00:00' },
+      { id: 2, title: 'JavaScript ES6+ va Async/Await',    students_count: 14, missed_count: 2, status: 'active', lesson_date: '2026-05-14T09:00:00', deadline: '2026-05-16T10:00:00', published_at: '2026-05-10T08:00:00' },
+      { id: 3, title: 'CSS Grid va Flexbox',               students_count: 15, missed_count: 5, status: 'draft',  lesson_date: '2026-04-30T09:00:00', deadline: '2026-05-02T10:00:00', published_at: '2026-04-28T08:00:00' },
+    ]);
     setExamsLoading(false);
 
   }, [id]);
@@ -825,7 +940,7 @@ export default function GroupDetail() {
   ];
 
   return (
-    <div style={{ minHeight:'100%', background:'#f1f5f9' }}>
+    <div style={{ background:'#f1f5f9', paddingBottom:24 }}>
       {/* Video Player Modal */}
       {playingVideo && (
         <div style={{ position:'fixed', inset:0, zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
@@ -1162,66 +1277,7 @@ export default function GroupDetail() {
 
       {/* ── Akademik davomati tab ── */}
       {activeTab === 'Akademik davomati' && (
-        <div>
-          <div style={{ marginBottom:20 }}>
-            <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1a1a2e' }}>Akademik davomati</h2>
-          </div>
-          <div style={{ background:'white', borderRadius:12, boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
-            {attendanceLoading ? (
-              <div style={{ padding:48, textAlign:'center', color:'#9ca3af', fontSize:13 }}>Yuklanmoqda...</div>
-            ) : attendance.length > 0 ? (
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                <thead>
-                  <tr style={{ borderBottom:'1px solid #f1f1f5' }}>
-                    <th style={{ padding:'13px 20px', textAlign:'left', fontWeight:600, color:'#9ca3af', fontSize:12, width:40 }}>#</th>
-                    <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Talaba</th>
-                    <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Sana</th>
-                    <th style={{ padding:'13px 16px', textAlign:'center', fontWeight:600, color:'#374151', fontSize:12 }}>Holat</th>
-                    <th style={{ padding:'13px 16px', textAlign:'left', fontWeight:600, color:'#374151', fontSize:12 }}>Izoh</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map(function(a, idx) {
-                    var sName = a.student ? (a.student.full_name||((a.student.first_name||'')+' '+(a.student.last_name||'')).trim()||a.student.name||"Noma'lum") : (a.student_name||a.name||"Noma'lum");
-                    var status = a.status || a.is_present;
-                    var isPresent = status===true||status==='present'||status==='PRESENT'||status===1;
-                    var isAbsent = status===false||status==='absent'||status==='ABSENT'||status===0;
-                    return (
-                      <tr key={a.id||idx} style={{ borderBottom:'1px solid #f5f5f7' }}
-                        onMouseEnter={function(e){ e.currentTarget.style.background='#fafafa'; }}
-                        onMouseLeave={function(e){ e.currentTarget.style.background='white'; }}>
-                        <td style={{ padding:'14px 20px', color:'#9ca3af', fontWeight:500 }}>{idx+1}</td>
-                        <td style={{ padding:'14px 16px' }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                            <div style={{ width:32,height:32,borderRadius:'50%',background:'#ede9ff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12,color:'#7c4dff',flexShrink:0 }}>
-                              {sName.charAt(0).toUpperCase()}
-                            </div>
-                            <span style={{ fontWeight:600, color:'#1a1a2e' }}>{sName}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding:'14px 16px', color:'#4b5563', fontWeight:500 }}>{fmtDate(a.date||a.lesson_date||a.created_at)}</td>
-                        <td style={{ padding:'14px 16px', textAlign:'center' }}>
-                          <span style={{ padding:'3px 12px', borderRadius:20, fontSize:12, fontWeight:700, background: isPresent?'#dcfce7':isAbsent?'#fee2e2':'#f3f4f6', color: isPresent?'#16a34a':isAbsent?'#ef4444':'#6b7280' }}>
-                            {isPresent?'Keldi':isAbsent?'Kelmadi':String(status||'—')}
-                          </span>
-                        </td>
-                        <td style={{ padding:'14px 16px', color:'#9ca3af', fontSize:12.5 }}>{a.comment||a.reason||a.note||'—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ padding:'56px 32px', textAlign:'center' }}>
-                <div style={{ width:56,height:56,borderRadius:16,background:'#ede9ff',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px' }}>
-                  <CheckCircleOutlined style={{ fontSize:28, color:'#7c4dff' }} />
-                </div>
-                <p style={{ margin:'0 0 6px', fontSize:15, fontWeight:700, color:'#1a1a2e' }}>Davomat ma'lumotlari yo'q</p>
-                <p style={{ margin:0, fontSize:13, color:'#9ca3af' }}>Hali bu guruh uchun davomat kiritilmagan</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <AkademikDavomat groupId={id} students={students} />
       )}
     </div>
   );

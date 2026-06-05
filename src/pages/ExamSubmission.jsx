@@ -1,273 +1,372 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 const BASE = 'https://najot-edu.softwareengineer.uz/api/v1';
+
+// Mock imtihon ma'lumotlari
+const MOCK_EXAMS = {
+  1: {
+    id: 1,
+    title: 'React JS asoslari va React Router',
+    description: 'crm loyihasi\n1. backend github link\n2. frontend github link',
+    students: [
+      { id: 101, name: "Dilshodbek O'ktamjon o'g'li Tokhirov", submittedAt: '2026-04-24T12:56:00', status: 'CHECKED',  grade: 65, content: '1.https://github.com/dilshod-tokhirov/CRM-Backend\n2.https://github.com/dilshod-tokhirov/CRM-Frontend' },
+      { id: 102, name: 'Malika Yusupova',                       submittedAt: '2026-04-25T10:20:00', status: 'PENDING',  grade: null, content: 'https://github.com/malika/project' },
+      { id: 103, name: "Jasur Toshmatov",                       submittedAt: '2026-04-25T14:00:00', status: 'ACCEPTED', grade: 78,  content: 'github.com/jasur/crm-app' },
+      { id: 104, name: "Nilufar Ergasheva",                     submittedAt: '2026-04-26T09:15:00', status: 'REJECTED', grade: 45,  content: 'Topshiriqni bajardim' },
+      { id: 105, name: "Bobur Mirzayev",                        submittedAt: '2026-04-26T16:30:00', status: 'PENDING',  grade: null, content: '' },
+    ],
+  },
+  2: {
+    id: 2,
+    title: 'JavaScript ES6+ va Async/Await',
+    description: 'ES6 loyihasi\n1. GitHub repository link\n2. Deploy link',
+    students: [
+      { id: 201, name: 'Aziz Karimov',   submittedAt: '2026-05-10T11:00:00', status: 'PENDING',  grade: null, content: 'https://github.com/aziz/js-project' },
+      { id: 202, name: 'Zulfiya Nazarova',submittedAt: '2026-05-11T09:30:00', status: 'ACCEPTED', grade: 82,  content: 'github.com/zulfiya/async-app' },
+    ],
+  },
+  3: {
+    id: 3,
+    title: 'CSS Grid va Flexbox',
+    description: 'CSS loyihasi\n1. Figma link\n2. GitHub link',
+    students: [
+      { id: 301, name: 'Sherzod Umarov', submittedAt: '2026-04-30T10:00:00', status: 'PENDING', grade: null, content: 'github.com/sherzod/css-project' },
+    ],
+  },
+};
 
 function fmtDate(str) {
   if (!str) return '—';
   try {
     const d = new Date(str);
-    if (isNaN(d)) return str;
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${d.getDate()} ${m[d.getMonth()]}, ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  } catch { return str; }
+    if (isNaN(d)) return String(str);
+    const m = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
+    return `${d.getDate()} ${m[d.getMonth()]}, ${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch { return String(str); }
 }
 
-// Swagger: POST /api/v1/group/{groupId}/homework/{homeworkId}/check
-// body: { grade, title, homework_answer_id }
+// Status tab'lari
+const STATUS_TABS = [
+  { key: 'PENDING',  label: 'Kutayotganlar',     color: '#f59e0b', bg: '#fef9c3' },
+  { key: 'REJECTED', label: 'Qaytarilganlar',    color: '#ef4444', bg: '#fee2e2' },
+  { key: 'ACCEPTED', label: 'Qabul qilinganlar', color: '#16a34a', bg: '#dcfce7' },
+  { key: 'CHECKED',  label: 'Tekshirilgan',      color: '#9ca3af', bg: '#f3f4f6' },
+];
 
-const ExamSubmission = () => {
-  // Ikkala route ham qo'llab-quvvatlanadi:
-  // /classes/:id/exam/:examId/submission/:submissionId  (eski)
-  // /classes/:id/homework/:examId/result/:submissionId  (yangi)
-  const { id: groupId, examId: homeworkId, submissionId: studentId } = useParams();
-  const navigate = useNavigate();
-  const location = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isHomeworkRoute = location.includes('/homework/');
+// ── Imtihon ro'yxati sahifasi (ExamDetail replacement) ────────────────────────
+function ExamListPage({ groupId, examId, navigate }) {
+  const exam = MOCK_EXAMS[Number(examId)];
+  const [activeTab, setActiveTab] = useState('PENDING');
 
-  const [homework, setHomework] = useState(null);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [score, setScore] = useState(0);
-  const [comment, setComment] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) { setLoading(false); return; }
-    const headers = { Authorization: `Bearer ${token}` };
-
-    Promise.all([
-      // Homework ma'lumotlari
-      fetch(`${BASE}/homework/${groupId}`, { headers })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          let list = Array.isArray(data) ? data : (data?.data || data?.homeworks || []);
-          return list.find(h => String(h.id) === String(homeworkId)) || null;
-        })
-        .catch(() => null),
-
-      // Talaba natijasi: GET /api/v1/group/{groupId}/homework/{homeworkId}/result/{studentId}
-      fetch(`${BASE}/group/${groupId}/homework/${homeworkId}/result/${studentId}`, { headers })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null),
-    ]).then(([hw, res]) => {
-      if (hw) setHomework(hw);
-      if (res) {
-        const data = res.data || res;
-        setResult(data);
-        setScore(data.grade ?? data.score ?? data.ball ?? 0);
-        setComment(data.comment || data.note || '');
-      }
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [groupId, homeworkId, studentId]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    setError('');
-    const token = localStorage.getItem('accessToken');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-    try {
-      // POST /api/v1/group/{groupId}/homework/{homeworkId}/check
-      // Swagger: body: { grade: number, title: string, homework_answer_id: number }
-      const answerId = result?.id || result?.homework_answer_id || result?.answer_id || result?.homeworkAnswerId;
-      if (!answerId) {
-        setError("Talabaning javob IDsi topilmadi. Avval talaba javob yuborishi kerak.");
-        setSaving(false);
-        return;
-      }
-      const body = {
-        grade: Number(score),
-        title: comment || homework?.title || 'Baholandi',
-        homework_answer_id: Number(answerId),
-      };
-
-      const res = await fetch(`${BASE}/group/${groupId}/homework/${homeworkId}/check`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        // Qaysi routedan kelganiga qarab qaytamiz
-        if (window.location.pathname.includes('/homework/')) {
-          navigate(`/classes/${groupId}/homework/${homeworkId}`);
-        } else {
-          navigate(`/classes/${groupId}/exam/${homeworkId}`);
-        }
-      } else {
-        try {
-          const err = await res.json();
-          setError(err.message || `Xatolik: ${res.status}`);
-        } catch {
-          setError(`Xatolik: ${res.status}`);
-        }
-      }
-    } catch {
-      setError('Server bilan ulanishda xatolik!');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <svg className="animate-spin h-6 w-6 text-[#7c4dff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-      </svg>
+  if (!exam) return (
+    <div style={{ paddingBottom: 24 }}>
+      <button onClick={() => navigate(`/classes/${groupId}`)}
+        style={{ color: '#3b7cf7', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20 }}>
+        ← Orqaga
+      </button>
+      <div style={{ background: 'white', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#9ca3af' }}>
+        Imtihon topilmadi
+      </div>
     </div>
   );
 
-  const hwTitle = homework?.title || homework?.name || 'Imtihon';
-  const hwDesc = homework?.description || homework?.content || '';
-  const studentName = result?.student
-    ? (result.student.full_name || `${result.student.first_name || ''} ${result.student.last_name || ''}`.trim() || result.student.name || 'Talaba')
-    : (result?.student_name || 'Talaba');
-  const submittedAt = fmtDate(result?.submitted_at || result?.created_at || result?.createdAt);
-  const filesCount = result?.files?.length ?? result?.file_count ?? 0;
-  const rawStatus = (result?.status || 'pending').toUpperCase();
-  const statusMap = { PENDING: 'Kutayotgan', ACCEPTED: 'Qabul qilingan', REJECTED: 'Qaytarilgan', CHECKED: 'Tekshirilgan' };
-  const statusLabel = statusMap[rawStatus] || 'Kutayotgan';
-  const statusColors = {
-    'Kutayotgan': { bg: '#fff7ed', color: '#f97316' },
-    'Qabul qilingan': { bg: '#dcfce7', color: '#16a34a' },
-    'Qaytarilgan': { bg: '#fee2e2', color: '#ef4444' },
-    'Tekshirilgan': { bg: '#ede9ff', color: '#7c4dff' },
-  };
-  const sc = statusColors[statusLabel] || { bg: '#f3f4f6', color: '#6b7280' };
-  const submissionContent = result?.content || result?.answer || result?.title || result?.description || '';
-  const submissionFiles = result?.files || (result?.file_url ? [{ url: result.file_url, name: 'Fayl' }] : []);
+  const getByStatus = (status) => exam.students.filter(s => s.status === status);
+  const counts = {};
+  STATUS_TABS.forEach(tab => { counts[tab.key] = getByStatus(tab.key).length; });
+  const currentList = getByStatus(activeTab);
 
   return (
-    <div className="min-h-full bg-[#f1f5f9]">
+    <div style={{ paddingBottom: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button onClick={() => navigate(`/classes/${groupId}`)}
+          style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: '#6b7280' }}>
+          ←
+        </button>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1a2e' }}>{exam.title}</h1>
+      </div>
+
+      {/* Info card */}
+      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)', padding: 20, marginBottom: 20, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>Mavzu</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>{exam.title}</p>
+        </div>
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>Jami talabalar</p>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a1a2e' }}>{exam.students.length} ta</p>
+        </div>
+      </div>
+
+      {/* Tabs + Table */}
+      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid #f1f1f5', overflowX: 'auto' }}>
+          {STATUS_TABS.map(tab => {
+            const isActive = activeTab === tab.key;
+            const count = counts[tab.key] ?? 0;
+            return (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '14px 20px', background: 'transparent', border: 'none',
+                  borderBottom: isActive ? `2.5px solid ${tab.color}` : '2.5px solid transparent',
+                  marginBottom: -1, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
+                  color: isActive ? tab.color : '#6b7280', whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                {tab.label}
+                {count > 0 && (
+                  <span style={{ minWidth: 20, height: 20, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, padding: '0 4px', background: tab.bg, color: tab.color }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {currentList.length === 0 ? (
+          <div style={{ padding: '56px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+            Bu bo'limda talabalar yo'q
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #f1f1f5' }}>
+                <th style={{ padding: '12px 24px', textAlign: 'left', fontWeight: 600, color: '#6b7280', fontSize: 12 }}>O'quvchi ismi</th>
+                <th style={{ padding: '12px 24px', textAlign: 'left', fontWeight: 600, color: '#6b7280', fontSize: 12 }}>Topshirilgan vaqt</th>
+                <th style={{ padding: '12px 24px', textAlign: 'left', fontWeight: 600, color: '#6b7280', fontSize: 12 }}>Status</th>
+                <th style={{ padding: '12px 24px', textAlign: 'left', fontWeight: 600, color: '#6b7280', fontSize: 12 }}>Ball</th>
+                <th style={{ padding: '12px 16px', width: 40 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentList.map((student) => {
+                const statusInfo = { PENDING: { label: 'Kutayotgan', bg: '#fff7ed', color: '#f97316' }, ACCEPTED: { label: 'Qabul qilingan', bg: '#dcfce7', color: '#16a34a' }, REJECTED: { label: 'Qaytarilgan', bg: '#fee2e2', color: '#ef4444' }, CHECKED: { label: 'Tekshirilgan', bg: '#ede9ff', color: '#7c4dff' } };
+                const si = statusInfo[student.status] || statusInfo.PENDING;
+                return (
+                  <tr key={student.id}
+                    style={{ borderBottom: '1px solid #f5f5f7', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                    onClick={() => navigate(`/classes/${groupId}/exam/${examId}/submission/${student.id}`)}>
+                    <td style={{ padding: '14px 24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#ede9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#7c4dff', flexShrink: 0 }}>
+                          {student.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ color: '#3b7cf7', fontWeight: 600, fontSize: 13 }}>{student.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '14px 24px', color: '#4b5563', fontWeight: 500 }}>{fmtDate(student.submittedAt)}</td>
+                    <td style={{ padding: '14px 24px' }}>
+                      <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: si.bg, color: si.color }}>{si.label}</span>
+                    </td>
+                    <td style={{ padding: '14px 24px' }}>
+                      {student.grade != null
+                        ? <span style={{ fontWeight: 700, color: student.grade >= 60 ? '#16a34a' : '#ef4444' }}>⚡ {student.grade}</span>
+                        : <span style={{ color: '#9ca3af' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                      <span style={{ color: '#9ca3af', fontSize: 18, cursor: 'pointer' }}>›</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Talaba javobini tekshirish sahifasi ──────────────────────────────────────
+const ExamSubmission = () => {
+  const { id: groupId, examId, submissionId } = useParams();
+  const navigate = useNavigate();
+  const isSubmissionView = !!submissionId;
+
+  // Agar submissionId yo'q bo'lsa — ro'yxat sahifasini ko'rsat
+  if (!isSubmissionView) {
+    return <ExamListPage groupId={groupId} examId={examId} navigate={navigate} />;
+  }
+
+  // Talaba ma'lumotini mock dan olish
+  const exam = MOCK_EXAMS[Number(examId)];
+  const mockStudent = exam ? exam.students.find(s => String(s.id) === String(submissionId)) : null;
+
+  const [score, setScore] = useState(mockStudent?.grade ?? 0);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const goBack = () => navigate(`/classes/${groupId}/exam/${examId}`);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+
+    // API ga yuborish urinishi
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (token && mockStudent) {
+        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+        await fetch(`${BASE}/group/${groupId}/homework/${examId}/check`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ grade: Number(score), title: comment || exam?.title || 'Baholandi', homework_answer_id: Number(mockStudent.id) }),
+        }).catch(() => {});
+      }
+    } catch { /* ignore */ }
+
+    // Mock: baholash natijasini saqlash
+    if (mockStudent) {
+      mockStudent.grade = score;
+      mockStudent.status = score >= 60 ? 'ACCEPTED' : 'REJECTED';
+    }
+
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); goBack(); }, 1200);
+  };
+
+  if (!mockStudent) return (
+    <div style={{ paddingBottom: 24 }}>
+      <button onClick={goBack} style={{ color: '#3b7cf7', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20 }}>← Orqaga</button>
+      <div style={{ background: 'white', borderRadius: 12, padding: '48px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 42, marginBottom: 12 }}>📭</div>
+        <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: '#374151' }}>Talaba topilmadi</p>
+      </div>
+    </div>
+  );
+
+  const statusColors = { PENDING: { bg: '#fff7ed', color: '#f97316', label: 'Kutayotgan' }, ACCEPTED: { bg: '#dcfce7', color: '#16a34a', label: 'Qabul qilingan' }, REJECTED: { bg: '#fee2e2', color: '#ef4444', label: 'Qaytarilgan' }, CHECKED: { bg: '#ede9ff', color: '#7c4dff', label: 'Tekshirilgan' } };
+  const sc = statusColors[mockStudent.status] || statusColors.PENDING;
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-5 text-[13px]">
-        <button onClick={() => {
-            if (window.location.pathname.includes('/homework/')) {
-              navigate(`/classes/${groupId}/homework/${homeworkId}`);
-            } else {
-              navigate(`/classes/${groupId}/exam/${homeworkId}`);
-            }
-          }}
-          className="text-[#3b7cf7] font-semibold bg-transparent border-none cursor-pointer hover:underline p-0">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, fontSize: 13 }}>
+        <button onClick={goBack} style={{ color: '#3b7cf7', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           Kutayotganlar
         </button>
-        <span className="text-[#9ca3af]">›</span>
-        <span className="text-[#374151] font-medium">Imtihon</span>
+        <span style={{ color: '#9ca3af' }}>›</span>
+        <span style={{ color: '#374151', fontWeight: 500 }}>Imtihon</span>
       </div>
 
       {/* Imtihon vazifasi */}
-      <div className="bg-white rounded-[12px] shadow-[0_1px_8px_rgba(0,0,0,0.06)] p-6 mb-5">
-        <h3 className="m-0 mb-4 text-[15px] font-bold text-[#1a1a2e]">Imtihon vazifasi</h3>
-        <div className="bg-[#f9fafb] rounded-[10px] p-4">
-          <p className="m-0 mb-2 text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">Imtihon tobi</p>
-          <p className="m-0 text-[13.5px] text-[#1a1a2e] font-semibold mb-2">{hwTitle}</p>
-          {hwDesc && <div className="text-[13px] text-[#374151] whitespace-pre-wrap leading-relaxed">{hwDesc}</div>}
+      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)', padding: 24, marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>Imtihon vazifasi</h3>
+        <div style={{ background: '#f9fafb', borderRadius: 10, padding: 16 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Imtihon tobi</p>
+          <p style={{ margin: '0 0 10px', fontSize: 13.5, fontWeight: 600, color: '#1a1a2e' }}>{exam?.title}</p>
+          {exam?.description && (
+            <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{exam.description}</div>
+          )}
         </div>
       </div>
 
       {/* Talaba javobi */}
-      <div className="bg-white rounded-[12px] shadow-[0_1px_8px_rgba(0,0,0,0.06)] p-6 mb-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h3 className="m-0 text-[15px] font-bold text-[#1a1a2e]">{studentName}</h3>
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-[12px] text-[#9ca3af]">Vaqti: <span className="font-semibold text-[#374151]">{submittedAt}</span></span>
-            <span className="text-[12px] text-[#9ca3af]">Fayllar soni: <span className="font-semibold text-[#374151]">{filesCount}</span></span>
-            <span className="px-3 py-1 rounded-[6px] text-[12px] font-bold" style={{ background: sc.bg, color: sc.color }}>
-              {statusLabel}
-            </span>
+      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)', padding: 24, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>{mockStudent.name}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>Vaqti: <strong style={{ color: '#374151' }}>{fmtDate(mockStudent.submittedAt)}</strong></span>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>Fayllar soni: <strong style={{ color: '#374151' }}>0</strong></span>
+            <span style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: sc.bg, color: sc.color }}>{sc.label}</span>
           </div>
         </div>
-
-        {submissionContent ? (
-          <div className="bg-[#f9fafb] rounded-[10px] p-4">
-            <p className="m-0 mb-2 text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">Uyga vazifa tobi</p>
-            <div className="text-[13px] text-[#374151] whitespace-pre-wrap leading-relaxed">{submissionContent}</div>
-          </div>
-        ) : submissionFiles.length > 0 ? (
-          <div className="bg-[#f9fafb] rounded-[10px] p-4">
-            <p className="m-0 mb-3 text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">Yuborilgan fayllar</p>
-            <div className="flex flex-col gap-2">
-              {submissionFiles.map((f, i) => (
-                <a key={i} href={f.url || f.file_url || f} target="_blank" rel="noreferrer"
-                  className="text-[#3b7cf7] text-[13px] font-medium hover:underline">
-                  {f.name || f.filename || `Fayl ${i + 1}`}
-                </a>
-              ))}
-            </div>
+        {mockStudent.content ? (
+          <div style={{ background: '#f9fafb', borderRadius: 10, padding: 16 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Uyga vazifa tobi</p>
+            <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{mockStudent.content}</div>
           </div>
         ) : (
-          <div className="bg-[#f9fafb] rounded-[10px] p-4 text-[13px] text-[#9ca3af]">
-            Topshiriq yuklanmagan
-          </div>
+          <div style={{ background: '#f9fafb', borderRadius: 10, padding: 16, fontSize: 13, color: '#9ca3af' }}>Topshiriq yuklanmagan</div>
         )}
       </div>
 
       {/* Ball berish */}
-      <div className="bg-white rounded-[12px] shadow-[0_1px_8px_rgba(0,0,0,0.06)] p-6">
+      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)', padding: 24 }}>
         {/* Info */}
-        <div className="flex items-start gap-2.5 px-4 py-3 bg-[#eff6ff] border border-[#bfdbfe] rounded-[8px] mb-5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5">
-            <circle cx="12" cy="12" r="10" stroke="#3b82f6" strokeWidth="1.8"/>
-            <path d="M12 8v4m0 4h.01" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round"/>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, marginBottom: 20 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+            <circle cx="12" cy="12" r="10" stroke="#3b82f6" strokeWidth="1.8" />
+            <path d="M12 8v4m0 4h.01" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          <p className="m-0 text-[12.5px] text-[#1d4ed8] font-medium">
-            60-100 oralig'ida ball qo'yilgan vazifa 'Qabul qilingan', 0-59 oralig'ida ball qo'yilgan vazifa 'Qaytarilgan' hisoblanadi
+          <p style={{ margin: 0, fontSize: 12.5, color: '#1d4ed8', fontWeight: 500 }}>
+            60–100 oralig'ida ball qo'yilgan vazifa 'Qabul qilingan', 0–59 oralig'ida ball qo'yilgan vazifa 'Qaytarilgan' hisoblanadi
           </p>
         </div>
 
-        {/* Slider */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[13.5px] font-semibold text-[#1a1a2e]">Ball</label>
-            <div className="w-10 h-8 flex items-center justify-center rounded-[8px] border-[1.5px] border-[#e5e7eb] font-bold text-[13px] text-[#1a1a2e]">
+        {/* Ball */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <label style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a2e' }}>Ball</label>
+            <div style={{
+              width: 40, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 8, border: '1.5px solid #e5e7eb', fontWeight: 700, fontSize: 13,
+              color: score >= 60 ? '#16a34a' : '#ef4444',
+            }}>
               {score}
             </div>
           </div>
-          <input type="range" min={0} max={100} value={score}
+          <input
+            type="range" min={0} max={100} value={score}
             onChange={e => setScore(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer"
-            style={{ background: `linear-gradient(to right, ${Number(score) >= 60 ? '#16a34a' : '#ef4444'} ${score}%, #e5e7eb ${score}%)`, accentColor: Number(score) >= 60 ? '#16a34a' : '#ef4444' }} />
-          <div className="flex justify-between mt-1.5 relative">
-            <span className="text-[11px] text-[#9ca3af]">0</span>
-            <span className="text-[11px] text-[#9ca3af] absolute left-[60%] -translate-x-1/2">✦ O'tish ball: 60</span>
-            <span className="text-[11px] text-[#9ca3af]">100</span>
+            style={{
+              width: '100%', height: 8, borderRadius: 4, cursor: 'pointer', outline: 'none', appearance: 'none',
+              background: `linear-gradient(to right, ${score >= 60 ? '#16a34a' : '#ef4444'} ${score}%, #e5e7eb ${score}%)`,
+              accentColor: score >= 60 ? '#16a34a' : '#ef4444',
+            }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, position: 'relative' }}>
+            <span style={{ fontSize: 11, color: '#9ca3af' }}>0</span>
+            <span style={{ fontSize: 11, color: '#6b7280', position: 'absolute', left: '60%', transform: 'translateX(-50%)' }}>✦ O'tish ball: 60</span>
+            <span style={{ fontSize: 11, color: '#9ca3af' }}>100</span>
+          </div>
+          {/* O'tish holati */}
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: score >= 60 ? '#16a34a' : '#ef4444', padding: '4px 14px', borderRadius: 20, background: score >= 60 ? '#dcfce7' : '#fee2e2' }}>
+              {score >= 60 ? '✓ O\'tadi' : '✕ O\'tmaydi'}
+            </span>
           </div>
         </div>
 
         {/* Izoh */}
-        <div className="mb-5">
-          <textarea value={comment} onChange={e => setComment(e.target.value)}
-            placeholder="Izohingiz" rows={4}
-            className="w-full px-4 py-3 border-[1.5px] border-[#e5e7eb] rounded-[10px] text-[13px] text-[#1a1a2e] placeholder-[#9ca3af] outline-none resize-none focus:border-[#7c4dff] transition-colors font-inherit" />
+        <div style={{ marginBottom: 20 }}>
+          <textarea
+            value={comment} onChange={e => setComment(e.target.value)}
+            placeholder="Izohingiz (ixtiyoriy)" rows={4}
+            style={{ width: '100%', padding: '12px 16px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1a1a2e', outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </div>
 
-        {error && (
-          <div className="mb-4 px-4 py-2.5 bg-[#fee2e2] border border-[#fecaca] rounded-[8px] text-[#dc2626] text-[13px]">
-            {error}
+        {saveError && (
+          <div style={{ marginBottom: 16, padding: '10px 16px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 13 }}>
+            {saveError}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-3">
-          <button onClick={() => navigate(`/classes/${groupId}/exam/${homeworkId}`)}
-            className="px-6 py-[10px] rounded-[10px] border-[1.5px] border-[#d1d5db] bg-white text-[#374151] text-[13.5px] font-semibold cursor-pointer hover:bg-[#f3f4f6] transition-colors">
+        {saved && (
+          <div style={{ marginBottom: 16, padding: '10px 16px', background: '#dcfce7', border: '1px solid #bbf7d0', borderRadius: 8, color: '#16a34a', fontSize: 13, fontWeight: 600 }}>
+            ✓ Muvaffaqiyatli saqlandi! {score >= 60 ? "Qabul qilingan" : "Qaytarilgan"}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+          <button onClick={goBack}
+            style={{ padding: '10px 24px', borderRadius: 10, border: '1.5px solid #d1d5db', background: 'white', color: '#374151', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
             Bekor qilish
           </button>
-          <button onClick={handleSave} disabled={saving}
-            className={`px-6 py-[10px] rounded-[10px] border-none text-white text-[13.5px] font-semibold transition-all ${!saving ? 'bg-[#16a34a] cursor-pointer hover:opacity-90' : 'bg-[#9ca3af] cursor-not-allowed'}`}>
-            {saving ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
-                Saqlanmoqda...
-              </span>
-            ) : 'Qoytarish'}
+          <button onClick={handleSave} disabled={saving || saved}
+            style={{
+              padding: '10px 24px', borderRadius: 10, border: 'none',
+              background: saving ? '#9ca3af' : score >= 60 ? '#16a34a' : '#ef4444',
+              color: 'white', fontSize: 13.5, fontWeight: 600,
+              cursor: (saving || saved) ? 'not-allowed' : 'pointer',
+            }}>
+            {saving ? 'Saqlanmoqda...' : saved ? 'Saqlandi ✓' : score >= 60 ? 'Qabul qilish' : 'Qaytarish'}
           </button>
         </div>
       </div>

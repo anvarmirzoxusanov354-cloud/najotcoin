@@ -65,7 +65,7 @@ const CreateExam = () => {
   };
 
   return (
-    <div className="min-h-full bg-white">
+    <div className="pb-6 bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 mb-8 pb-5 border-b border-[#e5e7eb]">
         <button

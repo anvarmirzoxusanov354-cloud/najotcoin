@@ -70,8 +70,10 @@ const ExamDetail = () => {
     fetch(`${BASE}/homework/${groupId}`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        if (!data) return;
         let list = Array.isArray(data) ? data : (data?.data || data?.homeworks || []);
-        const found = list.find(h => String(h.id) === String(homeworkId));
+        if (!Array.isArray(list)) return;
+        const found = list.find(item => String(item.id) === String(homeworkId));
         if (found) setHomework(found);
       })
       .catch(() => {});
@@ -94,7 +96,7 @@ const ExamDetail = () => {
   else if (deadline) timeStr = fmtDate(deadline);
 
   return (
-    <div className="min-h-full bg-[#f1f5f9]">
+    <div className="pb-6 bg-[#f1f5f9]">
       {/* Back + Title */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(`/classes/${groupId}`)}
@@ -168,12 +170,14 @@ const ExamDetail = () => {
                 const checkedAt = res.checked_at || res.updated_at ? fmtDate(res.checked_at || res.updated_at) : '—';
                 const score = res.grade ?? res.score ?? res.ball;
                 const studentId = res.student?.id || res.student_id;
+                const submissionId = res.id || res.answer_id || res.homework_answer_id;
+                const navId = submissionId || studentId;
 
                 return (
                   <tr key={res.id || idx} className="border-b border-[#f5f5f7] hover:bg-[#fafafa] transition-colors">
                     <td className="px-6 py-4">
                       <button
-                        onClick={() => navigate(`/classes/${groupId}/homework/${homeworkId}/result/${studentId}`)}
+                        onClick={() => { if (navId) navigate(`/classes/${groupId}/homework/${homeworkId}/result/${navId}`); }}
                         className="text-[#3b7cf7] font-semibold text-[13px] bg-transparent border-none cursor-pointer hover:underline p-0">
                         {studentName}
                       </button>
@@ -189,7 +193,7 @@ const ExamDetail = () => {
                     </td>
                     <td className="px-4 py-4 text-right">
                       <button
-                        onClick={() => navigate(`/classes/${groupId}/homework/${homeworkId}/result/${studentId}`)}
+                        onClick={() => { if (navId) navigate(`/classes/${groupId}/homework/${homeworkId}/result/${navId}`); }}
                         className="bg-transparent border-none cursor-pointer text-[#9ca3af] hover:text-[#7c4dff] transition-colors p-1">
                         <EditOutlined style={{ fontSize: 16 }} />
                       </button>

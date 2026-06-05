@@ -38,7 +38,7 @@ const MainLayout = () => {
           isDesktopSidebarOpen={isDesktopSidebarOpen}
           toggleDesktopSidebar={() => setIsDesktopSidebarOpen(prev => !prev)}
         />
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto min-h-0">
           <Outlet context={{ isDesktopSidebarOpen }} />
         </main>
       </div>

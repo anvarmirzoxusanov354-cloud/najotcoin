@@ -183,7 +183,7 @@ const Gifts = () => {
   );
 
   return (
-    <div className="p-2 sm:p-4 lg:p-6 bg-[#f1f5f9] min-h-full flex flex-col">
+    <div className="p-2 sm:p-4 lg:p-6 bg-[#f1f5f9] pb-6 flex flex-col">
 
       {/* Drawer Overlay */}
       {drawerOpen && (
