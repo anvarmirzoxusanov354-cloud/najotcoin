@@ -26,3 +26,4 @@ If you are developing a production application, we recommend using TypeScript wi
 # imtihon-7erp
 # exam
 # najotcoin
+# najotcoin
