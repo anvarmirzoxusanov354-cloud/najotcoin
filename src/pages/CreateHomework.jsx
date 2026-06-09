@@ -159,11 +159,17 @@ const CreateHomework = () => {
       }
 
       // 2-qadam: Homework yaratish
-      // Swagger: POST /api/v1/homework → multipart/form-data: { lesson_id, group_id, title, file? }
+      // Swagger: POST /api/v1/homework → multipart/form-data: { lesson_id, group_id, title, file?, deadline }
+      const now = new Date();
+      const deadline = new Date(now);
+      deadline.setDate(deadline.getDate() + 2); // 2 kundan keyin
+      const deadlineISO = deadline.toISOString();
+
       const fd = new FormData();
       fd.append('lesson_id', String(lessonId));
       fd.append('group_id', String(Number(id)));
       fd.append('title', subject.trim());
+      fd.append('deadline', deadlineISO);
       if (uploadedFile) fd.append('file', uploadedFile);
 
       const res = await fetch(`${BASE}/homework`, {

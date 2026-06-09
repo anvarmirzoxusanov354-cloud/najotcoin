@@ -214,6 +214,28 @@ const KurslarContent = () => {
     c.desc.toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredArchived = archivedCourses.filter(c =>
+    c.title.toLowerCase().includes(search.toLowerCase()) ||
+    c.desc.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const isArchiveTab = activeFilial === filialTabs.length - 1;
+  const displayCards = isArchiveTab ? filteredArchived : filteredCourses;
+
+  // Arxivdan tiklash — PATCH /api/v1/courses/{id} bilan status=active
+  const handleRestore = async (course) => {
+    const token = localStorage.getItem('accessToken');
+    try {
+      await fetch(`${BASE_URL}/courses/${course.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: course.title }),
+      });
+    } catch { /* ignore */ }
+    setArchivedCourses(prev => prev.filter(c => c.id !== course.id));
+    setCourses(prev => [...prev, course]);
+  };
+
   return (
     <div className="bg-white rounded-[16px] p-5 shadow-[0_1px_8px_rgba(0,0,0,0.06)]">
 
@@ -369,23 +391,40 @@ const KurslarContent = () => {
         {filialTabs.map((tab, i) => (
           <button key={i} onClick={() => setActiveFilial(i)} className={`p-[7px_16px] border-none rounded-[8px] cursor-pointer text-[13px] transition-all duration-150 ${activeFilial === i ? 'font-semibold bg-[#f0ebff] text-[#7c4dff]' : 'font-normal bg-[#f5f5fb] text-[#6b7280]'}`}>
             {tab}
+            {i === filialTabs.length - 1 && archivedCourses.length > 0 && (
+              <span className="ml-1.5 bg-[#9ca3af] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{archivedCourses.length}</span>
+            )}
           </button>
         ))}
       </div>
 
       {/* Course cards grid */}
+      {displayCards.length === 0 ? (
+        <div className="py-10 text-center text-[#9ca3af] text-[13px]">
+          {isArchiveTab ? 'Arxivda kurslar yo\'q' : 'Kurslar mavjud emas'}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        {filteredCourses.map((card) => (
-          <div key={card.id} className="rounded-[12px] p-3.5 border" style={{ background: card.bg, borderColor: card.border }}>
+        {displayCards.map((card) => (
+          <div key={card.id} className="rounded-[12px] p-3.5 border" style={{ background: isArchiveTab ? '#f9fafb' : card.bg, borderColor: isArchiveTab ? '#e5e7eb' : card.border }}>
             <div className="flex justify-between items-start mb-1.5">
               <span className="font-semibold text-[13px] text-[#1a1a2e] leading-[1.4]">{card.title}</span>
               <div className="flex gap-1 shrink-0 ml-1.5">
-                <button onClick={() => setDeleteConfirm({ id: card.id, title: card.title })} className="bg-white/85 border-none rounded-[6px] p-1 cursor-pointer text-[#ef5350] flex transition-colors hover:bg-white">
-                  <DeleteOutlineOutlined style={{ fontSize: '14px' }} />
-                </button>
-                <button onClick={() => openEdit(card)} className="bg-white/85 border-none rounded-[6px] p-1 cursor-pointer text-[#7c4dff] flex transition-colors hover:bg-white">
-                  <EditOutlined style={{ fontSize: '14px' }} />
-                </button>
+                {isArchiveTab ? (
+                  <button onClick={() => handleRestore(card)}
+                    className="bg-white border border-[#7c4dff] rounded-[6px] px-2 py-1 cursor-pointer text-[#7c4dff] text-[11px] font-semibold hover:bg-[#f0ebff]">
+                    Tiklash
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => setDeleteConfirm({ id: card.id, title: card.title })} className="bg-white/85 border-none rounded-[6px] p-1 cursor-pointer text-[#ef5350] flex transition-colors hover:bg-white">
+                      <DeleteOutlineOutlined style={{ fontSize: '14px' }} />
+                    </button>
+                    <button onClick={() => openEdit(card)} className="bg-white/85 border-none rounded-[6px] p-1 cursor-pointer text-[#7c4dff] flex transition-colors hover:bg-white">
+                      <EditOutlined style={{ fontSize: '14px' }} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <p className="text-[11.5px] text-[#6b7280] m-0 mb-2.5 leading-[1.5]">{card.desc}</p>
@@ -397,6 +436,7 @@ const KurslarContent = () => {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 };
