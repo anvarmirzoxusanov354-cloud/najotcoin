@@ -115,8 +115,12 @@ export default function ExamSubmission() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        setSaved(true);
-        setTimeout(() => goBack(), 1000);
+        const resultTab = score >= 60 ? 'ACCEPTED' : 'REJECTED';
+        navigate(isHwRoute
+          ? `/classes/${gid}/homework/${hwId}`
+          : `/classes/${gid}/exam/${hwId}`,
+          { state: { initialTab: resultTab } }
+        );
       } else {
         const e = await res.json().catch(() => ({}));
         setErr(e.message || `Xatolik: ${res.status}`);

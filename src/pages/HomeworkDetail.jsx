@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { KeyboardArrowLeftOutlined } from '@mui/icons-material';
 
 const BASE = 'https://najot-edu.softwareengineer.uz/api/v1';
@@ -42,13 +42,22 @@ async function fetchByStatus(groupId, hwId, status, headers) {
 export default function HomeworkDetail() {
   const { id: groupId, homeworkId: hwId } = useParams();
   const nav = useNavigate();
+  const location = useLocation();
 
   const [hw,       setHw]       = useState(null);
   const [counts,   setCounts]   = useState({ PENDING: 0, REJECTED: 0, ACCEPTED: 0, CHECKED: 0 });
   const [students, setStudents] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [tabLoad,  setTabLoad]  = useState(false);
-  const [tab,      setTab]      = useState('PENDING');
+  // location.state.initialTab kelsa shu tabdan boshlash
+  const [tab, setTab] = useState(location?.state?.initialTab || 'PENDING');
+
+  // Sahifaga qaytib kelganda initialTab o'zgarsa tabni yangilash
+  useEffect(() => {
+    if (location?.state?.initialTab) {
+      setTab(location.state.initialTab);
+    }
+  }, [location?.state?.initialTab]);
 
   // Homework info yuklaymiz
   useEffect(() => {
@@ -185,13 +194,15 @@ export default function HomeworkDetail() {
                 const name   = s.full_name || s.name || "Noma'lum";
                 const sentAt = fmt(s.created_at || s.submitted_at);
                 const navId  = s.answer_id || s.homework_answer_id || s.id;
+                // Faqat PENDING tabda bosish mumkin
+                const canClick = tab === 'PENDING' && !!navId;
 
                 return (
                   <tr key={s.id || i}
-                    style={{ borderBottom:'1px solid #f5f5f7', cursor:'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                    style={{ borderBottom:'1px solid #f5f5f7', cursor: canClick ? 'pointer' : 'default' }}
+                    onMouseEnter={e => { if (canClick) e.currentTarget.style.background = '#fafafa'; }}
                     onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                    onClick={() => { if (navId) nav(`/classes/${groupId}/homework/${hwId}/result/${navId}`); }}>
+                    onClick={() => { if (canClick) nav(`/classes/${groupId}/homework/${hwId}/result/${navId}`); }}>
                     <td style={{ padding:'14px 24px', color:'#9ca3af', fontWeight:500 }}>{i + 1}</td>
                     <td style={{ padding:'14px 24px' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -202,11 +213,13 @@ export default function HomeworkDetail() {
                         }}>
                           {name.charAt(0).toUpperCase()}
                         </div>
-                        <span style={{ color:'#3b7cf7', fontWeight:600 }}>{name}</span>
+                        <span style={{ color: canClick ? '#3b7cf7' : '#1a1a2e', fontWeight:600 }}>{name}</span>
                       </div>
                     </td>
                     <td style={{ padding:'14px 24px', color:'#4b5563', fontWeight:500 }}>{sentAt}</td>
-                    <td style={{ padding:'14px 16px', textAlign:'right', color:'#9ca3af', fontSize:16 }}>›</td>
+                    <td style={{ padding:'14px 16px', textAlign:'right', color: canClick ? '#9ca3af' : 'transparent', fontSize:16 }}>
+                      {canClick ? '›' : ''}
+                    </td>
                   </tr>
                 );
               })}
