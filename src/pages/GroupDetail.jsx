@@ -854,12 +854,35 @@ export default function GroupDetail() {
         if (list.length > 0) setGroup(function(p) { return p ? { ...p, schedules: list } : p; });
       }).catch(function() {});
 
-    // Homeworks
+    // Homeworks — GET /api/v1/homework/{groupId}
+    // Response: { success: true, data: [{ id, topic, homework:[{id}], homeworkPending, homeworkAccept, homeworkReject, existStudentsIngroup }] }
     setHomeworksLoading(true);
     fetch(BASE + '/homework/' + id, { headers })
-      .then(function(r) { return r.ok ? r.json() : []; })
-      .then(function(data) {
-        setHomeworks(Array.isArray(data) ? data : (data.data || data.homeworks || []));
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resp) {
+        if (!resp) { setHomeworksLoading(false); return; }
+        // API: { success: true, data: [...] }
+        var raw = Array.isArray(resp) ? resp
+                : Array.isArray(resp.data) ? resp.data
+                : [];
+        // Raw ma'lumotlarni to'g'ridan saqlash — normalize qilmaymiz
+        var list = raw.map(function(hw) {
+          var hwId = (hw.homework && hw.homework[0]) ? hw.homework[0].id : hw.id;
+          return {
+            id:             hwId,
+            lessonId:       hw.id,
+            title:          hw.topic || hw.title || hw.name || 'Nomsiz',
+            created_at:     (hw.homework && hw.homework[0]) ? hw.homework[0].created_at : hw.created_at,
+            deadline:       hw.deadline || hw.end_date || '',
+            lesson_date:    hw.lesson_date || hw.created_at || '',
+            // Sonlarni to'g'ridan raw objectdan olamiz
+            _existStudents: hw.existStudentsIngroup,
+            _pending:       hw.homeworkPending,
+            _accept:        hw.homeworkAccept,
+            _reject:        hw.homeworkReject,
+          };
+        });
+        setHomeworks(list);
         setHomeworksLoading(false);
       }).catch(function() { setHomeworksLoading(false); });
 
@@ -878,12 +901,28 @@ export default function GroupDetail() {
         setAttendanceLoading(false);
       }).catch(function() { setAttendanceLoading(false); });
 
-    // Files (Videolar) — Swagger: GET /api/v1/files/{groupId}
+    // Files (Videolar) — GET /api/v1/files/{groupId}
+    // Response: [{id, video_url, originalname, size_mb, created_at, lesson:{id, topic}}]
     setVideosLoading(true);
     fetch(BASE + '/files/' + id, { headers })
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
-        if (data) setVideos(Array.isArray(data) ? data : (data.data || data.files || data.items || []));
+        if (data) {
+          var list = Array.isArray(data) ? data : (data.data || data.files || data.items || []);
+          // video_url ni to'liq URL ga aylantirish
+          var normalized = list.map(function(v) {
+            var rawUrl = v.video_url || v.url || v.file_url || v.path || '';
+            var fullUrl = rawUrl
+              ? (rawUrl.startsWith('http') ? rawUrl : 'https://najot-edu.softwareengineer.uz/files/files/' + rawUrl)
+              : '';
+            return Object.assign({}, v, {
+              url:      fullUrl,
+              title:    v.originalname || v.title || v.name || v.filename || 'Video',
+              size:     v.size_mb ? (v.size_mb * 1024 * 1024) : (v.size || 0),
+            });
+          });
+          setVideos(normalized);
+        }
         setVideosLoading(false);
       }).catch(function() { setVideosLoading(false); });
 
@@ -955,8 +994,11 @@ export default function GroupDetail() {
                 style={{ background:'none', border:'none', cursor:'pointer', color:'white', fontSize:22, lineHeight:1 }}>×</button>
             </div>
             {(function() {
-              var rawUrl = playingVideo.url || playingVideo.file_url || playingVideo.path || playingVideo.link || playingVideo.file_path || playingVideo.src;
-              var videoUrl = rawUrl ? getFileUrl(rawUrl) : null;
+              // url allaqachon to'liq URL (normalize qilingan)
+              var videoUrl = playingVideo.url || playingVideo.video_url || playingVideo.file_url || playingVideo.path || null;
+              if (videoUrl && !videoUrl.startsWith('http')) {
+                videoUrl = 'https://najot-edu.softwareengineer.uz/files/files/' + videoUrl;
+              }
               if (videoUrl) {
                 return <video src={videoUrl} controls autoPlay style={{ width:'100%', display:'block', maxHeight:'70vh' }} />;
               }
@@ -1127,9 +1169,9 @@ export default function GroupDetail() {
                           onClick={function(e){ e.stopPropagation(); navigate('/classes/'+id+'/homework/'+hw.id); }}>
                           {hw.title||hw.name||hw.topic||'Nomsiz'}
                         </td>
-                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.students_count||0}</td>
-                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.pending_count||0}</td>
-                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw.checked_count||0}</td>
+                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw._existStudents !== undefined ? hw._existStudents : 0}</td>
+                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw._pending  !== undefined ? hw._pending  : 0}</td>
+                        <td style={{ padding:'16px 16px', textAlign:'center', color:'#374151', fontWeight:600 }}>{hw._accept   !== undefined ? hw._accept   : 0}</td>
                         <td style={{ padding:'16px 16px', color:'#4b5563', fontWeight:500 }}>{fmtDateTime(hw.created_at||hw.createdAt)}</td>
                         <td style={{ padding:'16px 16px', color:'#4b5563', fontWeight:500 }}>{fmtDateTime(hw.deadline||hw.end_date)}</td>
                         <td style={{ padding:'16px 16px', color:'#4b5563', fontWeight:500 }}>{fmtDate(hw.lesson_date||hw.lessonDate||hw.date)}</td>

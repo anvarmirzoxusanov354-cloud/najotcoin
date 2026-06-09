@@ -47,6 +47,7 @@ const KurslarContent = () => {
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, title }
+  const [saveError, setSaveError] = useState('');
   const [form, setForm] = useState({
     nomi: '', filiallar: ['Filial 1', 'Filial 2'],
     darsDavomiyligi: '', kursDavomiyligi: '',
@@ -114,17 +115,27 @@ const KurslarContent = () => {
     if (!deleteConfirm) return;
     const { id } = deleteConfirm;
     const token = localStorage.getItem('accessToken');
+    setDeleteConfirm(null); // modalni yopamiz
     try {
-      await fetch(`${BASE_URL}/courses/${id}`, {
+      const res = await fetch(`${BASE_URL}/courses/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-    } catch { /* ignore */ }
-    // UI da arxivga o'tkazamiz
-    const course = courses.find(c => c.id === id);
-    setCourses(prev => prev.filter(c => c.id !== id));
-    if (course) setArchivedCourses(prev => [...prev, course]);
-    setDeleteConfirm(null);
+      // API xato qaytarsa ham UI dan olib tashlaymiz (arxivga)
+      const course = courses.find(c => c.id === id);
+      setCourses(prev => prev.filter(c => c.id !== id));
+      if (course) setArchivedCourses(prev => [...prev, course]);
+
+      if (!res.ok && res.status !== 404) {
+        // Xato bo'lsa ham UI yangilangan, faqat log qilamiz
+        console.warn('Course delete warning:', res.status);
+      }
+    } catch {
+      // Network xatoda ham UI dan olib tashlaymiz
+      const course = courses.find(c => c.id === id);
+      setCourses(prev => prev.filter(c => c.id !== id));
+      if (course) setArchivedCourses(prev => [...prev, course]);
+    }
   };
 
   const handleSave = async () => {

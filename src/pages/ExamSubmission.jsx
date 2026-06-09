@@ -69,15 +69,28 @@ export default function ExamSubmission() {
 
     // 2. Talaba javobi
     // GET /api/v1/group/{groupId}/homework/{homeworkId}/result/{submissionId}
+    // Response: {success:true, data:{id, file, title, students:{id, full_name}}}
     fetch(`${BASE}/group/${gid}/homework/${hwId}/result/${submissionId}`, { headers: H })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) { setLoading(false); return; }
-        const data = Array.isArray(d) ? d[0] : (d.data || d);
-        if (data) {
-          setResult(data);
-          setScore(data.grade ?? data.score ?? data.ball ?? 0);
-          setComment(data.comment || data.note || '');
+        // Response: {success, data:{id, file, title, students:{id, full_name}}}
+        const raw = d.data || d;
+        if (raw && (raw.id || raw.students)) {
+          // Normalize: students maydonini student ga o'tkazamiz
+          const normalized = {
+            ...raw,
+            student: raw.students || raw.student || null,
+            // file ni to'liq URL ga aylantirish
+            files: raw.file
+              ? [{ url: raw.file.startsWith('http') ? raw.file : `${STATIC}/files/files/${raw.file}`, name: raw.file }]
+              : (raw.files || []),
+            content: raw.title || raw.content || raw.answer || raw.description || '',
+            status: raw.status || 'PENDING',
+          };
+          setResult(normalized);
+          setScore(normalized.grade ?? normalized.score ?? normalized.ball ?? 0);
+          setComment(normalized.comment || normalized.note || '');
         }
         setLoading(false);
       })
@@ -139,7 +152,7 @@ export default function ExamSubmission() {
 
   const sName    = result.student
     ? (result.student.full_name || `${result.student.first_name||''} ${result.student.last_name||''}`.trim() || result.student.name || 'Talaba')
-    : (result.student_name || 'Talaba');
+    : (result.students?.full_name || result.student_name || 'Talaba');
   const sPhoto   = result.student ? imgUrl(result.student.photo || result.student.avatar) : null;
   const sentAt   = fmt(result.submitted_at || result.created_at || result.createdAt);
   const files    = result.files || [];
@@ -203,19 +216,22 @@ export default function ExamSubmission() {
             <p style={{ margin:'0 0 10px', fontSize:13, fontWeight:600, color:'#374151' }}>Fayl: <strong>{files.length}</strong></p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
               {files.map((f, i) => {
-                const url = imgUrl(f.url || f.file_url || f.path || f);
-                const isImg = url && /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-                return (
+                const rawFile = f.url || f.file_url || f.path || (typeof f === 'string' ? f : '');
+                const url = rawFile
+                  ? (rawFile.startsWith('http') ? rawFile : `${STATIC}/files/files/${rawFile}`)
+                  : null;
+                const isImg = url && /\.(jpg|jpeg|png|gif|webp|avif)$/i.test(url);
+                return url ? (
                   <a key={i} href={url} target="_blank" rel="noreferrer"
                     style={{ display:'block', width:120, height:90, borderRadius:8, overflow:'hidden', border:'1px solid #e5e7eb', background:'#fff', textDecoration:'none' }}>
                     {isImg
                       ? <img src={url} alt={`fayl-${i+1}`} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                       : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#9ca3af', padding:4, textAlign:'center', wordBreak:'break-all' }}>
-                          {f.name || f.filename || `Fayl ${i+1}`}
+                          📎 {f.name || `Fayl ${i+1}`}
                         </div>
                     }
                   </a>
-                );
+                ) : null;
               })}
             </div>
           </div>
