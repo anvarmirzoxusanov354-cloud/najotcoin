@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useModal } from '../context/ModalContext';
+
 import {
   AddOutlined, DeleteOutlineOutlined, EditOutlined,
   SearchOutlined, FilterListOutlined, ArchiveOutlined,
@@ -21,9 +21,14 @@ const BASE_STATIC = 'https://najot-edu.softwareengineer.uz';
 
 function getPhotoUrl(photo) {
   if (!photo) return null;
-  if (photo.startsWith('http')) return photo;
-  if (photo.startsWith('/')) return BASE_STATIC + photo;
-  return BASE_STATIC + '/' + photo;
+  const p = String(photo);
+  if (p.startsWith('http')) return p;
+  // /files/... yoki files/... path
+  if (p.startsWith('/files')) return BASE_STATIC + p;
+  if (p.startsWith('files/')) return BASE_STATIC + '/' + p;
+  if (p.startsWith('/')) return BASE_STATIC + p;
+  // Oddiy fayl nomi bo'lsa
+  return BASE_STATIC + '/files/' + p;
 }
 
 const Avatar = ({ name, photo }) => {
@@ -40,7 +45,6 @@ const Avatar = ({ name, photo }) => {
 const LIMIT = 5;
 
 const Students = () => {
-  const { openModal, closeModal, isModalOpen } = useModal();
   const [students, setStudents] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [page, setPage]         = useState(1);
@@ -55,7 +59,7 @@ const Students = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [filterGuruh, setFilterGuruh] = useState('');
-  const [form, setForm] = useState({ name: '', phone: '+998', email: '', born: '', guruh: '', guruhIds: [], manzil: '', avatarName: '', password: '' });
+  const [form, setForm] = useState({ name: '', phone: '+998', email: '', born: '', guruh: '', guruhIds: [], manzil: '', avatarName: '', avatarFile: null, password: '' });
   const fileInputRef = useRef(null);
 
   const [availableGroups, setAvailableGroups] = useState([]);
@@ -207,7 +211,7 @@ const Students = () => {
 
   const archiveOne = (id) => setStudents(p => p.map(s => s.id === id ? { ...s, archived: !s.archived } : s));
 
-  const resetForm = () => setForm({ name: '', phone: '+998', email: '', born: '', guruh: '', guruhIds: [], manzil: '', avatarName: '', password: '' });
+  const resetForm = () => setForm({ name: '', phone: '+998', email: '', born: '', guruh: '', guruhIds: [], manzil: '', avatarName: '', avatarFile: null, password: '' });
 
   const openAdd  = ()  => { setEditId(null); resetForm(); setDrawerOpen(true); };
   const openEdit = (s) => {
@@ -230,6 +234,7 @@ const Students = () => {
         if (form.email) fd.append('email', form.email);
         if (form.manzil) fd.append('address', form.manzil);
         if (form.password) fd.append('password', form.password);
+        if (form.avatarFile) fd.append('photo', form.avatarFile);
         (form.guruhIds || []).forEach(gid => fd.append('groups[]', gid));
 
         const res = await fetch(`https://najot-edu.softwareengineer.uz/api/v1/students/${editId}`, {
@@ -294,6 +299,7 @@ const Students = () => {
         fd.append('password', form.password || 'Student123!');
         if (form.manzil) fd.append('address', form.manzil);
         if (isoDate) fd.append('birth_date', isoDate);
+        if (form.avatarFile) fd.append('photo', form.avatarFile);
         // Tanlangan guruh IDlarini qo'shamiz
         (form.guruhIds || []).forEach(id => fd.append('groups[]', id));
 
@@ -338,16 +344,17 @@ const Students = () => {
 
       {/* Groups Modal Overlay */}
       {groupsModalOpen && (
-        <div onClick={() => { 
+        <div onClick={(e) => { 
+          e.stopPropagation();
           setTempSelectedGroups([]); 
+          setGroupSearch('');
           setGroupsModalOpen(false); 
-          closeModal('groups-selection'); 
         }}
           className="fixed inset-0 z-[1250] bg-black/40 backdrop-blur-[2px] flex items-center justify-center transition-opacity duration-300" />
       )}
 
       {/* Groups Selection Modal - Centered */}
-      <div className={`fixed inset-0 z-[1260] flex items-center justify-center pointer-events-none transition-opacity duration-300 ${groupsModalOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0'}`}>
+      <div className={`fixed inset-0 z-[1260] flex items-center justify-center transition-opacity duration-300 ${groupsModalOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
         <div className="bg-white rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-w-[520px] w-full mx-4 overflow-hidden">
           {/* Modal Header */}
           <div className="px-6 py-6 border-b border-[#e5e7eb]">
@@ -357,10 +364,11 @@ const Students = () => {
                 <p className="m-0 text-[13px] text-[#6b7280]">Bitta yoki bir nechta guruhni tanlang</p>
               </div>
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   setTempSelectedGroups([]);
                   setGroupsModalOpen(false);
-                  closeModal('groups-selection');
                   setGroupSearch('');
                 }}
                 className="bg-transparent border-none cursor-pointer text-[#9ca3af] hover:text-[#1a1a2e] p-0.5"
@@ -449,11 +457,11 @@ const Students = () => {
           {/* Action Buttons */}
           <div className="px-6 py-4 flex gap-3 justify-end bg-[#f9fafb]">
             <button
-              onClick={() => {
-                // Bekor qilish — o'zgarishlarni saqlama
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 setTempSelectedGroups([]);
                 setGroupsModalOpen(false);
-                closeModal('groups-selection');
                 setGroupSearch('');
               }}
               className="px-6 py-2 rounded-[10px] border border-[#d1d5db] bg-white text-[#1a1a2e] font-semibold text-[13px] hover:bg-[#f3f4f6] transition-colors cursor-pointer"
@@ -461,13 +469,13 @@ const Students = () => {
               Bekor qilish
             </button>
             <button
-              onClick={() => {
-                // Saqlash — tanlangan guruhlar nomi va IDlarini form ga o'tkazish
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 const names = tempSelectedGroups.map(g => g.name).join(', ');
                 const ids = tempSelectedGroups.map(g => g.id);
                 setForm(p => ({ ...p, guruh: names, guruhIds: ids }));
                 setGroupsModalOpen(false);
-                closeModal('groups-selection');
                 setGroupSearch('');
               }}
               className="px-6 py-2 rounded-[10px] bg-gradient-to-r from-[#7c4dff] to-[#5b7fff] text-white font-semibold text-[13px] hover:shadow-md transition-all cursor-pointer border-none"
@@ -536,6 +544,7 @@ const Students = () => {
               type="button"
               onClick={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 // Modal ochilganda tempSelectedGroups ni init qil
                 const currentNames = form.guruh ? form.guruh.split(',').map(g => g.trim()).filter(Boolean) : [];
                 const currentIds = form.guruhIds || [];
@@ -546,7 +555,6 @@ const Students = () => {
                 setTempSelectedGroups(current);
                 setGroupSearch('');
                 setGroupsModalOpen(true);
-                openModal('groups-selection', 'ltr');
               }}
               className="w-full flex items-center justify-start gap-2 p-[12px_14px] rounded-[10px] border-[1.5px] border-[#e5e7eb] bg-white cursor-pointer hover:border-[#7c4dff] transition-colors"
             >
@@ -585,13 +593,21 @@ const Students = () => {
             <label className="block text-[13px] font-bold text-[#1a1a2e] mb-[8px]">Surati</label>
             <div onClick={() => fileInputRef.current?.click()}
               className="border-[1.5px] border-dashed border-[#e5e7eb] rounded-[12px] p-[28px_14px] text-center cursor-pointer bg-white hover:border-[#7c4dff] transition-colors relative">
-              <CloudUploadOutlined style={{ fontSize: 32, color: '#9ca3af', mb: '8px' }} />
+              {form.avatarFile ? (
+                <img
+                  src={URL.createObjectURL(form.avatarFile)}
+                  alt="preview"
+                  className="w-16 h-16 rounded-full object-cover mx-auto mb-2"
+                />
+              ) : (
+                <CloudUploadOutlined style={{ fontSize: 32, color: '#9ca3af', mb: '8px' }} />
+              )}
               <p className="m-0 mb-1 text-[13px] text-[#374151] font-medium mt-2"><span className="text-[#7c4dff] font-bold">Click to upload</span> or drag and drop</p>
               <p className="m-0 text-[11.5px] text-[#9ca3af]">JPG or PNG (max. 2 MB)</p>
               {form.avatarName && <p className="m-0 mt-2 text-[12px] text-[#7c4dff] font-bold">{form.avatarName}</p>}
             </div>
             <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden"
-              onChange={e => { if (e.target.files[0]) setForm(p => ({ ...p, avatarName: e.target.files[0].name })); }} />
+              onChange={e => { if (e.target.files[0]) setForm(p => ({ ...p, avatarName: e.target.files[0].name, avatarFile: e.target.files[0] })); }} />
           </div>
         </div>
 

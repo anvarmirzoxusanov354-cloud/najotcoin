@@ -28,9 +28,16 @@ const BASE_STATIC = 'https://najot-edu.softwareengineer.uz';
 
 function getPhotoUrl(photo) {
   if (!photo) return null;
-  if (photo.startsWith('http')) return photo;
-  if (photo.startsWith('/')) return BASE_STATIC + photo;
-  return BASE_STATIC + '/' + photo;
+  const p = String(photo);
+  if (p.startsWith('http')) return p;
+  // Backend path formatlari: /files/files/..., /files/..., files/...
+  if (p.startsWith('/files/files/')) return BASE_STATIC + p;
+  if (p.startsWith('/files/'))       return BASE_STATIC + p;
+  if (p.startsWith('files/files/')) return BASE_STATIC + '/' + p;
+  if (p.startsWith('files/'))       return BASE_STATIC + '/files/' + p;
+  if (p.startsWith('/'))            return BASE_STATIC + p;
+  // Oddiy fayl nomi yoki UUID bo'lsa
+  return BASE_STATIC + '/files/files/' + p;
 }
 
 const Avatar = ({ name, photo }) => {
@@ -51,7 +58,7 @@ const Teachers = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '' });
+  const [form, setForm] = useState({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '', avatarFile: null });
   const [guruhSearch, setGuruhSearch] = useState('');
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [availableGroups, setAvailableGroups] = useState([]);
@@ -262,7 +269,7 @@ const Teachers = () => {
     setDrawerOpen(true);
   };
 
-  const resetForm = () => { setForm({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '', parol: '' }); setGuruhSearch(''); setShowParol(false); };
+  const resetForm = () => { setForm({ phone: '+998', email: '', name: '', born: '', guruhlar: [], guruhIds: [], jinsi: '', avatarName: '', avatarFile: null, parol: '' }); setGuruhSearch(''); setShowParol(false); };
   const handleSave = async () => {
     if (!form.name.trim()) return;
     if (editId !== null) {
@@ -275,6 +282,7 @@ const Teachers = () => {
         if (form.email) formData.append('email', form.email);
         if (form.parol) formData.append('password', form.parol);
         if (form.born) formData.append('address', form.born);
+        if (form.avatarFile) formData.append('photo', form.avatarFile);
 
         const res = await fetch(`https://najot-edu.softwareengineer.uz/api/v1/teachers/${editId}`, {
           method: 'PATCH',
@@ -307,6 +315,7 @@ const Teachers = () => {
         if (form.email) formData.append('email', form.email);
         if (form.parol) formData.append('password', form.parol);
         if (form.born) formData.append('address', form.born);
+        if (form.avatarFile) formData.append('photo', form.avatarFile);
 
         const res = await fetch('https://najot-edu.softwareengineer.uz/api/v1/teachers', {
           method: 'POST',
@@ -317,10 +326,11 @@ const Teachers = () => {
         });
         if (res.ok) {
           const saved = await res.json();
+          const savedData = saved.data || saved;
           const newT = {
-            id: saved.id || saved._id || Date.now(),
+            id: savedData.id || savedData._id || Date.now(),
             name: form.name.trim(),
-            avatar: null,
+            avatar: savedData.photo || savedData.avatar || null,
             email: form.email,
             guruh: form.guruhlar[0] || '',
             phone: form.phone,
@@ -557,7 +567,15 @@ const Teachers = () => {
             <label className="block text-[13px] font-semibold text-[#374151] mb-[7px]">Surati</label>
             <div onClick={() => fileInputRef.current?.click()}
               className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[10px] p-[28px_14px] text-center cursor-pointer bg-[#fafafa] hover:border-[#7c4dff]">
-              <CloudUploadOutlined className="text-[28px] text-[#9ca3af] mb-2" />
+              {form.avatarFile ? (
+                <img
+                  src={URL.createObjectURL(form.avatarFile)}
+                  alt="preview"
+                  className="w-16 h-16 rounded-full object-cover mx-auto mb-2"
+                />
+              ) : (
+                <CloudUploadOutlined className="text-[28px] text-[#9ca3af] mb-2" />
+              )}
               <p className="m-0 mb-1 text-[13px] text-[#374151]">
                 <span className="text-[#7c4dff] font-semibold">Click to upload</span> or drag and drop
               </p>
@@ -565,7 +583,7 @@ const Teachers = () => {
               {form.avatarName && <p className="m-0 mt-1.5 text-[12px] text-[#7c4dff] font-medium">{form.avatarName}</p>}
             </div>
             <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden"
-              onChange={e => { if (e.target.files[0]) setForm(prev => ({ ...prev, avatarName: e.target.files[0].name })); }} />
+              onChange={e => { if (e.target.files[0]) setForm(prev => ({ ...prev, avatarName: e.target.files[0].name, avatarFile: e.target.files[0] })); }} />
           </div>
 
           {/* + Parol qo'shish */}
