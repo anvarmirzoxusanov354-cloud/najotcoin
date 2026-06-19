@@ -9,6 +9,12 @@ const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
+  // Student admin sahifalariga kira olmaydi
+  const role = localStorage.getItem('role');
+  if (role === 'STUDENT') {
+    return <Navigate to="/student" replace />;
+  }
+
   return <Outlet />;
 };
 

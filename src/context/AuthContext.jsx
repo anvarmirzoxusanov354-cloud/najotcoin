@@ -2,6 +2,8 @@ import { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
 
+const BASE_URL = 'https://najot-edu.softwareengineer.uz/api/v1';
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     return localStorage.getItem('isLogged');
@@ -13,12 +15,12 @@ export const AuthProvider = ({ children }) => {
     window.fetch = async function(...args) {
       const response = await originalFetch(...args);
       if (response.status === 401) {
-        // Clone qilamiz — body faqat bir marta o'qiladi
         const url = typeof args[0] === 'string' ? args[0] : '';
-        // Login endpointida 401 bo'lsa logout qilmaymiz
-        if (!url.includes('/auth/login')) {
+        if (!url.includes('/auth/login') && !url.includes('/auth/send-otp')) {
           localStorage.removeItem('isLogged');
           localStorage.removeItem('accessToken');
+          localStorage.removeItem('role');
+          localStorage.removeItem('phone');
           setUser(null);
           window.location.href = '/login';
         }
@@ -32,17 +34,36 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (phone, password) => {
     try {
-      const res = await fetch('https://najot-edu.softwareengineer.uz/api/v1/auth/login', {
+      // 1) send-otp → telefon mavjudligini tekshiramiz
+      const otpRes  = await fetch(`${BASE_URL}/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const otpData = await otpRes.json();
+
+      if (!otpRes.ok || !otpData.success) {
+        return { ok: false, message: otpData.message || 'Telefon raqam topilmadi!' };
+      }
+
+      // 2) login → accessToken va role olamiz
+      const res  = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, password }),
       });
       const data = await res.json();
+
       if (res.ok && data.accessToken) {
-        localStorage.setItem('isLogged', 'true');
+        // API response da "role": "STUDENT" yoki "ADMIN" to'g'ridan-to'g'ri keladi
+        const role = String(data.role || otpData.role || 'ADMIN').toUpperCase();
+
+        localStorage.setItem('isLogged',    'true');
         localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('role',        role);
+        localStorage.setItem('phone',       phone);
         setUser('true');
-        return { ok: true };
+        return { ok: true, role };
       }
       return { ok: false, message: data.message || 'Telefon yoki parol xato!' };
     } catch {
@@ -53,6 +74,8 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('isLogged');
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('role');
+    localStorage.removeItem('phone');
     setUser(null);
   };
 

@@ -5,6 +5,10 @@ const PublicRoute = () => {
   const { user } = useAuth();
 
   if (user === 'true') {
+    const role = localStorage.getItem('role');
+    if (role === 'STUDENT') {
+      return <Navigate to="/student" replace />;
+    }
     return <Navigate to="/" replace />;
   }
 

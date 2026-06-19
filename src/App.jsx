@@ -22,6 +22,7 @@ import Gifts from './pages/Gifts';
 import Management from './pages/Management';
 import Subscription from './pages/Subscription';
 import AttendancePage from './pages/AttendancePage';
+import StudentDashboard from './pages/StudentDashboard';
 
 function App() {
   return (
@@ -55,6 +56,7 @@ function App() {
                 <Route path="subscription" element={<Subscription />} />
               </Route>
             </Route>
+            <Route path="/student" element={<StudentDashboard />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ModalProvider>

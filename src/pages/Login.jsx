@@ -23,7 +23,11 @@ const Login = () => {
     const result = await login(username, password);
     setLoading(false);
     if (result.ok) {
-      navigate('/');
+      if (result.role === 'STUDENT') {
+        window.location.href = '/student';
+      } else {
+        window.location.href = '/';
+      }
     } else {
       setError(result.message || 'Telefon yoki parol xato!');
     }

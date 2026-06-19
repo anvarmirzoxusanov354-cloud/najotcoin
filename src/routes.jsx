@@ -13,6 +13,7 @@ import CreateHomework from './pages/CreateHomework';
 import Students from './pages/Students';
 import Gifts from './pages/Gifts';
 import Management from './pages/Management';
+import StudentDashboard from './pages/StudentDashboard';
 
 const routes = [
   {
@@ -71,6 +72,10 @@ const routes = [
         ],
       },
     ],
+  },
+  {
+    path: '/student',
+    element: <StudentDashboard />,
   },
   {
     path: '*',
